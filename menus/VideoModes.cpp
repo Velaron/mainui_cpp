@@ -103,9 +103,10 @@ public:
 
 	void SetMode( int mode );
 	void SetMode( int w, int h );
-	void SetConfig( );
+	void SetConfig();
 	void RevertChanges();
 	void ApplyChanges();
+	void FinalizeChanges();
 
 	void GetConfig();
 
@@ -148,6 +149,7 @@ void CMenuVidModesModel::Update()
 
 void CMenuRenderersModel::Update()
 {
+	const char *r_refdll_loaded = EngFuncs::GetCvarString( "r_refdll_loaded" );
 	m_refs.Purge();
 
 	for( int i = 0; ; i++ )
@@ -157,14 +159,18 @@ void CMenuRenderersModel::Update()
 		if( !EngFuncs::GetRenderers( i, temp.shortName, sizeof( temp.shortName ), temp.readable, sizeof( temp.readable )))
 			break;
 
+		// append asterisk to currently loaded renderer
+		if( !stricmp( r_refdll_loaded, temp.shortName ))
+			strncat( temp.readable, "*", sizeof( temp.readable ));
+
 		m_refs.AddToTail( temp );
 	}
 }
 
 void CMenuVidModes::GetRendererConfig()
 {
-	// get current loaded renderer
-	const char *refdll = EngFuncs::GetCvarString( "r_refdll_loaded" );
+	// get current _configured_ renderer
+	const char *refdll = EngFuncs::GetCvarString( "r_refdll" );
 
 	if( !refdll[0] )
 	{
@@ -206,8 +212,8 @@ void CMenuVidModes::GetConfig()
 	windowMode.SetCurrentValue( fullscreen );
 	vidList.SetCurrentIndex( vid_mode );
 
-	renderers.UpdateCvar();
-	vsync.UpdateCvar();
+	renderers.UpdateCvar( true );
+	vsync.UpdateCvar( true );
 
 	ApplyChanges();
 }
@@ -233,7 +239,7 @@ UI_VidModes_SetConfig
 */
 void CMenuVidModes::SetConfig( )
 {
-	bool testMode = true;
+	bool testMode = false;
 	int  currentWindowModeIndex = windowMode.GetCurrentValue();
 	int  currentModeIndex = vidList.GetCurrentIndex();
 	bool isVidModeChanged = prevMode != currentModeIndex;
@@ -274,15 +280,20 @@ void CMenuVidModes::SetConfig( )
 		Hide();
 }
 
+void CMenuVidModes::FinalizeChanges()
+{
+	prevMode = EngFuncs::GetCvarFloat( "vid_mode" );
+	prevFullscreen = EngFuncs::GetCvarFloat( "fullscreen" );
+	prevModeX = EngFuncs::GetCvarFloat( "width" );
+	prevModeY = EngFuncs::GetCvarFloat( "height" );
+}
+
 void CMenuVidModes::ApplyChanges()
 {
 	if( testModeMsgBox.IsVisible( ))
 		return;
 
-	prevMode = EngFuncs::GetCvarFloat( "vid_mode" );
-	prevFullscreen = EngFuncs::GetCvarFloat( "fullscreen" );
-	prevModeX = EngFuncs::GetCvarFloat( "width" );
-	prevModeY = EngFuncs::GetCvarFloat( "height" );
+	FinalizeChanges();
 }
 
 void CMenuVidModes::RevertChanges()
@@ -347,7 +358,7 @@ void CMenuVidModes::_Init( void )
 	vsync.LinkCvar( "gl_vsync" );
 
 	testModeMsgBox.SetMessage( testModeMsg );
-	testModeMsgBox.onPositive = VoidCb( &CMenuVidModes::ApplyChanges );
+	testModeMsgBox.onPositive = VoidCb( &CMenuVidModes::FinalizeChanges );
 	testModeMsgBox.onNegative = VoidCb( &CMenuVidModes::RevertChanges );
 	testModeMsgBox.Link( this );
 

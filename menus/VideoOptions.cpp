@@ -8,7 +8,7 @@ of the License, or (at your option) any later version.
 
 This program is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 
 See the GNU General Public License for more details.
 
@@ -23,6 +23,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "PicButton.h"
 #include "Slider.h"
 #include "CheckBox.h"
+#include "YesNoMessageBox.h"
 
 #define ART_BANNER	  	"gfx/shell/head_vidoptions"
 #define ART_GAMMA		"gfx/shell/gamma"
@@ -55,12 +56,14 @@ public:
 	CMenuSlider	screenSize;
 #endif
 	CMenuSlider	gammaIntensity;
-	CMenuSlider	glareReduction;
-	CMenuCheckBox   vbo;
+	CMenuSlider	brightness;
+	CMenuCheckBox	vbo;
 	CMenuCheckBox	swwater;
 	CMenuCheckBox	overbright;
 	CMenuCheckBox	filtering;
 	CMenuCheckBox	detailtex;
+	CMenuCheckBox	hudscale;
+	CMenuYesNoMessageBox	msgBox;
 
 	HIMAGE		hTestImage;
 };
@@ -73,7 +76,7 @@ CMenuVidOptions::UpdateConfig
 void CMenuVidOptions::UpdateConfig( void )
 {
 	float val1 = RemapVal( gammaIntensity.GetCurrentValue(), 0.0, 1.0, 1.8, 3.0 );
-	float val2 = RemapVal( glareReduction.GetCurrentValue(), 0.0, 1.0, 0.0, 3.0 );
+	float val2 = RemapVal( brightness.GetCurrentValue(), 0.0, 1.0, 0.0, 3.0 );
 	EngFuncs::CvarSetValue( "gamma", val1 );
 	EngFuncs::CvarSetValue( "brightness", val2 );
 	EngFuncs::ProcessImage( hTestImage, val1, val2 );
@@ -85,11 +88,11 @@ void CMenuVidOptions::GetConfig( void )
 	float val2 = EngFuncs::GetCvarFloat( "brightness" );
 
 	gammaIntensity.SetCurrentValue( RemapVal( val1, 1.8f, 3.0f, 0.0f, 1.0f ) );
-	glareReduction.SetCurrentValue( RemapVal( val2, 0.0f, 3.0f, 0.0f, 1.0f ) );
+	brightness.SetCurrentValue( RemapVal( val2, 0.0f, 3.0f, 0.0f, 1.0f ) );
 	EngFuncs::ProcessImage( hTestImage, val1, val2 );
 
 	gammaIntensity.SetOriginalValue( val1 );
-	glareReduction.SetOriginalValue( val2 );
+	brightness.SetOriginalValue( val2 );
 }
 
 void CMenuVidOptions::SaveAndPopMenu( void )
@@ -102,6 +105,7 @@ void CMenuVidOptions::SaveAndPopMenu( void )
 	swwater.WriteCvar();
 	overbright.WriteCvar();
 	filtering.WriteCvar();
+	hudscale.WriteCvar();
 	// gamma and brightness is already written
 
 	CMenuFramework::SaveAndPopMenu();
@@ -183,11 +187,11 @@ void CMenuVidOptions::_Init( void )
 	gammaIntensity.onCvarGet = VoidCb( &CMenuVidOptions::GetConfig );
 	height += 60;
 
-	glareReduction.SetCoord( 72, height );
-	glareReduction.szName = L( "GameUI_Brightness" );
-	glareReduction.Setup( 0, 1.0, 0.025 );
-	glareReduction.onChanged = VoidCb( &CMenuVidOptions::UpdateConfig );
-	glareReduction.onCvarGet = VoidCb( &CMenuVidOptions::GetConfig );
+	brightness.SetCoord( 72, height );
+	brightness.szName = L( "GameUI_Brightness" );
+	brightness.Setup( 0, 1.0, 0.025 );
+	brightness.onChanged = VoidCb( &CMenuVidOptions::UpdateConfig );
+	brightness.onCvarGet = VoidCb( &CMenuVidOptions::GetConfig );
 	height += 60;
 
 	done.szName = L( "GameUI_OK" );
@@ -216,18 +220,63 @@ void CMenuVidOptions::_Init( void )
 	filtering.SetCoord( 72, height );
 	height += 50;
 
+	hudscale.szName = L( "Auto scale HUD" );
+	hudscale.SetCoord( 72, height );
+	height += 50;
+
+	msgBox.SetMessage( L( "^1WARNING: This is an experimental option and turning it on might break mods!^7\n\nReload the game or reconnect to the server to apply the settings."));
+	msgBox.onNegative.pExtra = &hudscale;
+	SET_EVENT_MULTI( msgBox.onNegative,
+	{
+		CMenuCheckBox *cb = (CMenuCheckBox *)pExtra;
+
+		cb->bChecked = false;
+		cb->SetCvarValue( 0.0f );
+	});
+
+	SET_EVENT_MULTI( hudscale.onChanged,
+	{
+		CMenuCheckBox *cb = (CMenuCheckBox *)pSelf;
+		CMenuVidOptions *parent = (CMenuVidOptions *)pSelf->Parent();
+
+		if( EngFuncs::ClientInGame( ))
+		{
+			// bring up warning message box
+			// FIXME: try to save the game, apply the settings, and then load it back. This will be useful when changing resolution too.
+			parent->msgBox.Show();
+		}
+	});
+
+	SET_EVENT_MULTI( hudscale.onCvarWrite,
+	{
+		CMenuCheckBox *cb = (CMenuCheckBox *)pSelf;
+
+		if( cb->bChecked )
+		{
+			// automatically scale HUD as if we have 1024x768 screen
+			// (saving aspect ratio)
+			// FIXME: allow configuring this value?
+			EngFuncs::CvarSetValue( cb->CvarName(), 1024.0f );
+		}
+		else
+		{
+			EngFuncs::CvarSetValue( cb->CvarName(), 0.0f );
+		}
+	});
+
 	AddItem( banner );
 	AddItem( done );
 #if LEGACY_VIEWSIZE
 	AddItem( screenSize );
 #endif
 	AddItem( gammaIntensity );
-	AddItem( glareReduction );
+	AddItem( brightness );
 	AddItem( detailtex );
 	AddItem( vbo );
 	AddItem( swwater );
 	AddItem( overbright );
 	AddItem( filtering );
+	AddItem( hudscale );
 	AddItem( testImage );
 
 #if LEGACY_VIEWSIZE
@@ -235,13 +284,14 @@ void CMenuVidOptions::_Init( void )
 #endif
 
 	gammaIntensity.LinkCvar( "gamma" );
-	glareReduction.LinkCvar( "brightness" );
+	brightness.LinkCvar( "brightness" );
 
 	detailtex.LinkCvar( "r_detailtextures" );
 	swwater.LinkCvar( "r_ripple" );
 	vbo.LinkCvar( "gl_vbo" );
 	overbright.LinkCvar( "gl_overbright" );
 	// skip filtering.LinkCvar, different names in ref_gl and ref_soft
+	hudscale.LinkCvar( "hud_scale" );
 }
 
 void CMenuVidOptions::_VidInit()
