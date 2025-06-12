@@ -94,8 +94,8 @@ endif()
 if(MAINUI_USE_CUSTOM_FONT_RENDER)
 	# Win32 will always use GDI font renderer
 	if(NOT WIN32)
-		if(MAINUI_USE_STB)
-			# Use stbtt
+		if(MAINUI_USE_STB OR APPLE)
+			# Use stbtt for Android and Apple platforms
 			add_definitions(-DMAINUI_USE_STB)
 		else()
 			# Use freetype2
