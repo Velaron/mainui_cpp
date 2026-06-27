@@ -16,25 +16,11 @@ GNU General Public License for more details.
 #ifndef UTILS_H
 #define UTILS_H
 
-//extern ui_enginefuncs_t g_engfuncs;
-//extern ui_textfuncs_t g_textfuncs;
-
 #include "enginecallback_menu.h"
 #include "gameinfo.h"
 #include "FontManager.h"
 #include "BMPUtils.h"
 #include "miniutl.h"
-#if 0
-#include <tgmath.h>
-#endif
-
-#define FILE_GLOBAL	static
-#define DLL_GLOBAL
-
-#define MAX_INFO_STRING	256	// engine limit
-
-#define RAD2DEG( x )	((float)(x) * (float)(180.f / (float)M_PI))
-#define DEG2RAD( x )	((float)(x) * (float)((float)M_PI / 180.f))
 
 //
 // How did I ever live without ASSERT?
@@ -42,10 +28,8 @@ GNU General Public License for more details.
 #ifdef _DEBUG
 void DBG_AssertFunction( bool fExpr, const char* szExpr, const char* szFile, int szLine, const char* szMessage );
 #define ASSERT( f )		DBG_AssertFunction( f, #f, __FILE__, __LINE__, NULL )
-#define ASSERTSZ( f, sz )	DBG_AssertFunction( f, #f, __FILE__, __LINE__, sz )
 #else
 #define ASSERT( f )
-#define ASSERTSZ( f, sz )
 #endif
 
 extern ui_globalvars_t		*gpGlobals;
@@ -156,12 +140,15 @@ int UI_FadeAlpha( int starttime, int endtime );
 const char *Info_ValueForKey( const char *s, const char *key );
 int KEY_GetKey( const char *binding );			// ripped out from engine
 char *StringCopy( const char *input );			// copy string into new memory
-int COM_CompareSaves( const void **a, const void **b );
 void Com_EscapeCommand( char *newCommand, const char *oldCommand, int len );
 void UI_EnableTextInput( bool enable );
 
 void UI_LoadCustomStrings( void );
+#if defined( __GNUC__ ) || defined( __clang__ )
+const char *L( const char *szStr ) __attribute__(( format_arg( 1 ))); // L means Localize!
+#else
 const char *L( const char *szStr ); // L means Localize!
+#endif
 void UI_FreeCustomStrings( void );
 
 inline size_t Q_strncpy( char *dst, const char *src, size_t size )
@@ -185,10 +172,6 @@ inline size_t Q_strncpy( char *dst, const char *src, size_t size )
 #define CS_TIME			16	// size of time string
 
 #define MAX_SCOREBOARDNAME	32 // engine and dlls allows only 32 chars
-
-// color strings
-#define ColorIndex( c )		((( c ) - '0' ) & 7 )
-#define IsColorString( p )		( p && *( p ) == '^' && *(( p ) + 1) && *(( p ) + 1) >= '0' && *(( p ) + 1 ) <= '9' )
 
 // stringize utilites
 #define STR( x ) #x
@@ -262,8 +245,8 @@ inline bool IsEnd( int key )
 {
 	switch( key )
 	{
-	case K_HOME:
-	case K_KP_HOME:
+	case K_END:
+	case K_KP_END:
 		return true;
 	}
 	return false;
@@ -403,8 +386,6 @@ namespace Names
 bool CheckIsNameValid( const char *name );
 }
 }
-extern const int table_cp1251[64];
-int Con_UtfProcessChar(int in );
 int Con_UtfMoveLeft( const char *str, int pos );
 int Con_UtfMoveRight( const char *str, int pos, int length );
 

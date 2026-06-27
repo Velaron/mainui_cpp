@@ -39,7 +39,13 @@ void CMenuEditable::Reload()
 {
 	// editable already initialized, so update
 	if( m_szCvarName )
+	{
 		UpdateCvar( true );
+
+		// Ensure onCvarGet is called for reliable sync
+		if( onCvarGet )
+			onCvarGet( this );
+	}
 }
 
 void CMenuEditable::SetCvarValue( float value )
@@ -76,7 +82,7 @@ void CMenuEditable::UpdateCvar( bool haveUpdate )
 	if( onCvarGet )
 	{
 		onCvarGet( this );
-		haveUpdate = false; // FIXME: add return values to events
+		haveUpdate = true; // FIXME: add return values to events
 	}
 	else if( m_szCvarName )
 	{

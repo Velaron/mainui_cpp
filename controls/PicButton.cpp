@@ -20,7 +20,7 @@ GNU General Public License for more details.
 #include "PicButton.h"
 #include "Utils.h"
 #include "Scissor.h"
-#include "BtnsBMPTable.h"
+#include "Btns.h"
 #include <stdlib.h>
 #include "Framework.h"
 
@@ -116,7 +116,7 @@ CMenuPicButton::CMenuPicButton() : BaseClass()
 	m_iLastFocusTime = -512;
 	bPulse = false;
 
-	SetSize( UI_BUTTONS_WIDTH, UI_BUTTONS_HEIGHT );
+	size = uiStatic.buttons_draw_size;
 
 	SetCharSize( QM_DEFAULTFONT );
 }
@@ -208,9 +208,6 @@ bool CMenuPicButton::KeyDown( int key )
 	return handled;
 }
 
-
-// #define ALT_PICBUTTON_FOCUS_ANIM
-
 /*
 =================
 CMenuPicButton::DrawButton
@@ -219,14 +216,7 @@ CMenuPicButton::DrawButton
 void CMenuPicButton::DrawButton( int r, int g, int b, int a, wrect_t *rects, int state )
 {
 	EngFuncs::PIC_Set( hPic, r, g, b, a );
-#ifdef ALT_PICBUTTON_FOCUS_ANIM
-	UI::PushScissor( m_scPos.x, m_scPos.y, uiStatic.buttons_draw_width * flFill, uiStatic.buttons_draw_height );
-#endif
-	EngFuncs::PIC_DrawAdditive( m_scPos, uiStatic.buttons_draw_size, &rects[state] );
-
-#ifdef ALT_PICBUTTON_FOCUS_ANIM
-	UI::PopScissor();
-#endif
+	EngFuncs::PIC_DrawAdditive( m_scPos, uiStatic.buttons_draw_size.Scale(), &rects[state] );
 }
 
 /*
@@ -250,11 +240,11 @@ void CMenuPicButton::Draw( )
 	if( iOldState == BUTTON_NOFOCUS && state != BUTTON_NOFOCUS )
 		iFocusStartTime = uiStatic.realTime;
 
-	if( szStatusText && iFlags & QMF_NOTIFY )
+	if( szStatusText && FBitSet( iFlags, QMF_NOTIFY ) && !FBitSet( gMenu.m_gameinfo.flags, GFL_NOSKILLS ))
 	{
 		Point coord;
 
-		coord.x = m_scPos.x + 290 * uiStatic.scaleX;
+		coord.x = m_scPos.x + ( uiStatic.buttons_draw_size.w + 40 ) * uiStatic.scaleX;
 		coord.y = m_scPos.y + m_scSize.h / 2 - EngFuncs::ConsoleCharacterHeight() / 2;
 
 		int	r, g, b;
@@ -275,18 +265,20 @@ void CMenuPicButton::Draw( )
 		wrect_t rects[3];
 		for( int i = 0; i < 3; i++ )
 		{
-			if( button_id > 0 )
+			if( button_id >= 0 )
 			{
-				rects[i].top = uiStatic.buttons_points[i];
-				rects[i].bottom = uiStatic.buttons_points[i] + uiStatic.buttons_height;
+				rects[i].left = uiStatic.btns.GetX( button_id );
+				rects[i].right = uiStatic.btns.GetX( button_id ) + uiStatic.btns.GetWidth();
+				rects[i].top = uiStatic.btns.GetY( button_id ) + i * uiStatic.btns.GetTexStride();
+				rects[i].bottom = rects[i].top + uiStatic.btns.GetTexH();
 			}
 			else
 			{
-				rects[i].top = 26 * i;
-				rects[i].bottom = 26 * ( i + 1 );
+				rects[i].left = 0;
+				rects[i].right = EngFuncs::PIC_Width( hPic );
+				rects[i].top = round( EngFuncs::PIC_Height( hPic ) * i / 3.0f );
+				rects[i].bottom = round( EngFuncs::PIC_Height( hPic ) * ( i + 1 ) / 3.0f );
 			}
-			rects[i].left = 0;
-			rects[i].right = uiStatic.buttons_width;
 		}
 
 		// decay
@@ -394,7 +386,7 @@ void CMenuPicButton::SetPicture( EDefaultBtns ID )
 	if( ID < 0 || ID > PC_BUTTONCOUNT )
 		return; // bad id
 
-	hPic = uiStatic.buttonsPics[ID];
+	hPic = uiStatic.btns.GetPic( ID );
 	button_id = ID;
 	hotkey = g_hotkeys[ID];
 }

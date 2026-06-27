@@ -18,8 +18,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 */
 
+#include "q_client.h"
 #include "Framework.h"
-#include "kbutton.h"
 #include "MenuStrings.h"
 #include "Bitmap.h"
 #include "PicButton.h"
@@ -114,9 +114,9 @@ void CAdvancedControls::ToggleLookCheckboxes( bool write )
 	if( write )
 	{
 		if( mouseLook.bChecked )
-			EngFuncs::ClientCmd( FALSE, "+mlook\nbind _force_write\n" );
+			EngFuncs::ClientCmd( false, "+mlook\nbind _force_write\n" );
 		else
-			EngFuncs::ClientCmd( FALSE, "-mlook\nbind _force_write\n" );
+			EngFuncs::ClientCmd( false, "-mlook\nbind _force_write\n" );
 	}
 }
 
@@ -195,7 +195,6 @@ void CAdvancedControls::_Init( void )
 	inputDev.iFlags |= QMF_NOTIFY;
 	if( CL_IsActive() && !EngFuncs::GetCvarFloat( "host_serverstate" ))
 		inputDev.SetGrayed( true );
-	//inputDev.SetRect( 72, 230, UI_BUTTONS_WIDTH, UI_BUTTONS_HEIGHT );
 	inputDev.SetCoord( 72, 210 );
 
 	AddItem( banner );

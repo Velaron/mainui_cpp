@@ -106,7 +106,7 @@ void CMenuTable::VidInit()
 	}
 
 	// calculate header size(position is table position)
-	headerSize.w = m_scSize.w - arrow.w + iStrokeWidth * 2;
+	headerSize.w = m_scSize.w - arrow.w + iStrokeWidth;
 
 	// box is lower than header
 	boxPos.x = m_scPos.x;
@@ -389,7 +389,7 @@ bool CMenuTable::KeyDown( int key )
 	}
 	else if( UI::Key::IsEnd( key ))
 	{
-		int lastItem = Q_min( m_pModel->GetRows() - 1, 0 );
+		int lastItem = Q_max( m_pModel->GetRows() - 1, 0 );
 		sound = iCurItem < lastItem ? uiStatic.sounds[SND_MOVE] : uiStatic.sounds[SND_BUZZ];
 		iCurItem = lastItem;
 	}

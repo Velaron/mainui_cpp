@@ -21,7 +21,7 @@ GNU General Public License for more details.
 #include "EventSystem.h"
 #include "Utils.h"
 #include "FontManager.h"
-#include "BtnsBMPTable.h"
+#include "Btns.h"
 #include "WindowSystem.h"
 #include "Image.h"
 #include "utlstring.h"
@@ -32,7 +32,7 @@ GNU General Public License for more details.
 
 #define MAX_HINT_TEXT		512
 
-// menu buttons dims
+// menu buttons default dims
 #define UI_BUTTONS_WIDTH  250 // ( 156 / 640 ) * 1024
 #define UI_BUTTONS_HEIGHT 42  // ( 26 / 480 ) * 768
 
@@ -59,7 +59,9 @@ extern cvar_t	*ui_precache;
 extern cvar_t	*ui_showmodels;
 extern cvar_t   *ui_show_window_stack;
 extern cvar_t	*ui_borderclip;
-extern cvar_t	*ui_language;
+extern cvar_t	*ui_prefer_won_background;
+extern cvar_t	*ui_background_stretch;
+extern cvar_t	*ui_logohorizontal;
 
 enum EUISounds
 {
@@ -112,12 +114,7 @@ typedef struct
 	int		initialized;
 
 	// btns_main.bmp stuff
-	HIMAGE	buttonsPics[PC_BUTTONCOUNT];
-
-	int		buttons_width; // btns_main.bmp global width
-	int		buttons_height; // one button height
-	int		buttons_points[3];
-
+	CBtnsManager btns;
 	Size		buttons_draw_size; // scaled image what we drawing
 	int		width;
 	bool	textInput;
@@ -218,7 +215,6 @@ inline void UI_DrawRectangleExt( Point pos, Size size, const unsigned int color,
 }
 
 void UI_StartSound( const char *sound );
-void UI_LoadBmpButtons();
 
 int UI_CreditsActive( void );
 void UI_DrawFinalCredits( void );
@@ -227,6 +223,10 @@ void UI_CloseMenu( void );
 
 // SCR support
 void UI_LoadScriptConfig( void );
+void UI_SaveScriptConfig( void );
+void UI_ApplyServerSettings( void );
+const char *UI_GetScriptCvar( const char *name );
+void UI_SetScriptCvar( const char *name, const char *value );
 
 class CMenuEntry
 {
@@ -294,9 +294,11 @@ void UI_TouchButtons_Menu( void );
 void UI_TouchEdit_Menu( void );
 void UI_FileDialog_Menu( void );
 void UI_TouchButtons_GetButtonList();
+void UI_MobileGyro_Menu( void );
 void UI_GamePad_Menu( void );
+void UI_GamePadGyro_Menu( void );
 void UI_Zoo_Menu( void );
-void UI_ServerInfo_Menu( netadr_t adr, const char *hostname, bool legacy );
+void UI_ServerInfo_Menu( netadr_t adr, const char *hostname );
 
 bool UI_AdvUserOptions_IsAvailable( void );
 void UI_AdvUserOptions_Menu( void );

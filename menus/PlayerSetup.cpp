@@ -27,103 +27,10 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "SpinControl.h"
 #include "YesNoMessageBox.h"
 #include "PlayerModelView.h"
-#include "StringArrayModel.h"
 #include "StringVectorModel.h"
+#include "ColorPickerDialog.h"
 
 #define ART_BANNER		"gfx/shell/head_customize"
-
-static const byte Orange[] = { 255, 120,  24 };
-static const byte Yellow[] = { 225, 180,  24 };
-static const byte Blue[]   = {   0,  60, 255 };
-static const byte Ltblue[] = {   0, 167, 255 };
-static const byte Green[]  = {   0, 167,   0 };
-static const byte Red[]    = { 255,  43,   0 };
-static const byte Brown[]  = { 123,  73,   0 };
-static const byte Ltgray[] = { 100, 100, 100 };
-static const byte Dkgray[] = {  36,  36,  36 };
-static const byte Rainbow[] = {
-	0xE4, 0x03, 0x03,
-	0xFF, 0x8C, 0x00,
-	0xFF, 0xED, 0x00,
-	0x00, 0x80, 0x26,
-	0x24, 0x40, 0x8E,
-	0x73, 0x29, 0x82,
-};
-static const byte Lesbian[] = {
-	0xD5, 0x2D, 0x00,
-	0xEF, 0x76, 0x27,
-	0xFF, 0x9A, 0x56,
-	0xFF, 0xFF, 0xFF,
-	0xD1, 0x62, 0xA4,
-	0xB5, 0x56, 0x90,
-	0xA3, 0x02, 0x62,
-};
-static const byte Gay[] = {
-	0x07, 0x8D, 0x70,
-	0x26, 0xCE, 0xAA,
-	0x98, 0xE8, 0xC1,
-	0xFF, 0xFF, 0xFF,
-	0x7B, 0xAD, 0xE2,
-	0x50, 0x49, 0xCC,
-	0x3D, 0x1A, 0x78,
-};
-static const byte Bi[] = {
-	0xD6, 0x02, 0x70,
-	0xD6, 0x02, 0x70,
-	0x9B, 0x4F, 0x96,
-	0x00, 0x38, 0xA8,
-	0x00, 0x38, 0xA8,
-};
-static const byte Trans[] = {
-	0x5B, 0xCE, 0xFA,
-	0xF5, 0xA9, 0xB8,
-	0xFF, 0xFF, 0xFF,
-	0xF5, 0xA9, 0xB8,
-	0x5B, 0xCE, 0xFA,
-};
-static const byte Pan[] = {
-	0xFF, 0x21, 0x8C,
-	0xFF, 0xD8, 0x00,
-	0x21, 0xB1, 0xFF,
-};
-static const byte Enby[] = {
-	0xFC, 0xF4, 0x34,
-	0xFF, 0xFF, 0xFF,
-	0x9C, 0x59, 0xD1,
-	0x2C, 0x2C, 0x2C,
-};
-
-#define FLAG_L( str, x ) str, x, sizeof( x ) / 3
-#define FLAG( x ) FLAG_L( #x, x )
-
-// TODO: Get rid of this hardcoded mess
-// allow user to set whatever they want
-// through UI or some config lst file
-static const struct logo_color_t
-{
-	const char *name;
-	const byte *rgb;
-	int stripes;
-} g_LogoColors[] =
-{
-{ "FullColor", 0, 0 },
-{ FLAG_L( "#Valve_Orange", Orange ) }, // L( "Valve_Orange" )
-{ FLAG_L( "#Valve_Yellow", Yellow ) }, // L( "Valve_Yellow" )
-{ FLAG_L( "#Valve_Blue",   Blue )   }, // L( "Valve_Blue" )
-{ FLAG_L( "#Valve_Ltblue", Ltblue ) }, // L( "Valve_Ltblue" )
-{ FLAG_L( "#Valve_Green",  Green )  }, // L( "Valve_Green" )
-{ FLAG_L( "#Valve_Red",    Red )    }, // L( "Valve_Red" )
-{ FLAG_L( "#Valve_Brown",  Brown )  }, // L( "Valve_Brown" )
-{ FLAG_L( "#Valve_Ltgray", Ltgray ) }, // L( "Valve_Ltgray" )
-{ FLAG_L( "#Valve_Dkgray", Dkgray ) }, // L( "Valve_Dkgray" )
-{ FLAG( Rainbow ) },
-{ FLAG( Lesbian ) },
-{ FLAG( Gay )     },
-{ FLAG( Bi )      },
-{ FLAG( Trans )   },
-{ FLAG( Pan )     },
-{ FLAG( Enby )    },
-};
 
 class CMenuPlayerSetup : public CMenuFramework
 {
@@ -139,12 +46,14 @@ public:
 	void ApplyColorToImagePreview();
 	void ApplyColorToLogoPreview();
 	void WriteNewLogo();
+	void ShowColorPicker();
+	void OnColorPickerOk();
 	void SaveAndPopMenu() override;
 
 	class CModelListModel : public CStringVectorModel
 	{
 	public:
-		void Update();
+		void Update() override;
 	} modelsModel;
 
 	class CLogosListModel : public CStringVectorModel
@@ -191,12 +100,23 @@ public:
 	{
 	public:
 		virtual void Draw();
-		const logo_color_t *color;
 		HIMAGE hImage;
+		const byte ( *stripes )[3];
+		int stripeCount;
+		bool colorable;
+		const bool *horizontal;
 	} logoImage;
 
 	CMenuSpinControl	logo;
-	CMenuSpinControl	logoColor;
+	CMenuPicButton		btnChooseColor;
+	CMenuColorPickerDialog	colorPickerDlg;
+	byte			m_stripes[MAX_LOGO_STRIPES][3];
+	int			m_stripeCount;
+	bool			m_horizontal;
+	bool			m_logoColorable;
+
+	void ParseLogoColorCvar();
+	void WriteLogoColorCvar();
 
 	CMenuYesNoMessageBox msgBox;
 
@@ -212,44 +132,54 @@ void CMenuPlayerSetup::CMenuLogoPreview::Draw()
 
 		UI_DrawString( font, m_scPos, m_scSize, L( "No logo" ), colorBase, m_scChSize, QM_CENTER, ETF_SHADOW );
 	}
-	else if( color->stripes == 0 )
+	else if( !colorable || stripeCount <= 1 )
 	{
-		EngFuncs::PIC_Set( hImage, 255, 255, 255 );
+		byte r = colorable ? stripes[0][0] : 255;
+		byte g = colorable ? stripes[0][1] : 255;
+		byte b = colorable ? stripes[0][2] : 255;
+		EngFuncs::PIC_Set( hImage, r, g, b );
 		EngFuncs::PIC_DrawTrans( m_scPos, m_scSize );
 	}
 	else
 	{
 		const Size img_sz = EngFuncs::PIC_Size( hImage );
-		Size  ui_sz = m_scSize;
-		wrect_t rc = { 0 };
+		const bool hz = horizontal && *horizontal;
 
-		rc.right = img_sz.w;
-		rc.bottom = img_sz.h;
+		const double tex_per_stripe = ( hz ? img_sz.w  : img_sz.h  ) / (double)stripeCount;
+		const double scr_per_stripe = ( hz ? m_scSize.w : m_scSize.h ) / (double)stripeCount;
 
-		double texture_pixels_per_stripe = img_sz.h / (double)color->stripes;
-		double screen_pixels_per_stripe  = ui_sz.h  / (double)color->stripes;
-
-		ui_sz.h = round( screen_pixels_per_stripe );
-
-		for( int i = 0; i < color->stripes; i++ )
+		for( int i = 0; i < stripeCount; i++ )
 		{
-			wrect_t rc2 = rc;
-			Point ui_pt;
+			int scr_start = (int)( i * scr_per_stripe + 0.5 );
+			int scr_next  = (int)(( i + 1 ) * scr_per_stripe + 0.5 );
+			int tex_start = (int)( i * tex_per_stripe + 0.5 );
+			int tex_next  = (int)(( i + 1 ) * tex_per_stripe + 0.5 );
 
-			rc2.top    = round( i * texture_pixels_per_stripe );
-			rc2.bottom = round(( i + 1 ) * texture_pixels_per_stripe );
+			wrect_t rc = {};
+			if( hz )
+			{
+				rc.left   = tex_start;
+				rc.right  = tex_next;
+				rc.bottom = img_sz.h;
+			}
+			else
+			{
+				rc.right  = img_sz.w;
+				rc.top    = tex_start;
+				rc.bottom = tex_next;
+			}
 
-			ui_pt.x = m_scPos.x;
-			ui_pt.y = m_scPos.y + round( i * screen_pixels_per_stripe );
+			Point ui_pt = hz ? Point( m_scPos.x + scr_start, m_scPos.y ) : Point( m_scPos.x, m_scPos.y + scr_start );
+			Size  ui_sz = hz ? Size( scr_next - scr_start, m_scSize.h ) : Size( m_scSize.w, scr_next - scr_start );
 
-			EngFuncs::PIC_Set( hImage, color->rgb[i * 3 + 0], color->rgb[i * 3 + 1], color->rgb[i * 3 + 2] );
-			EngFuncs::PIC_DrawTrans( ui_pt, ui_sz, &rc2 );
+			EngFuncs::PIC_Set( hImage, stripes[i][0], stripes[i][1], stripes[i][2] );
+			EngFuncs::PIC_DrawTrans( ui_pt, ui_sz, &rc );
 		}
 	}
 
 	int textHeight = m_scPos.y - (m_scChSize * 1.5f);
 	uint textflags = ( iFlags & QMF_DROPSHADOW ) ? ETF_SHADOW : 0;
-	UI_DrawString( font, m_scPos.x, textHeight, m_scSize.w, m_scChSize, szName, uiColorHelp, m_scChSize, QM_LEFT, textflags | ETF_FORCECOL );
+	UI_DrawString( font, m_scPos.x, textHeight, m_scSize.w, m_scChSize, szName, uiColorHelp, m_scChSize, QM_LEFT, textflags | ETF_FORCECOL | ETF_NOSIZELIMIT );
 
 	// draw the rectangle
 	if( eFocusAnimation == QM_HIGHLIGHTIFFOCUS && IsCurrentSelected() )
@@ -273,7 +203,7 @@ void CMenuPlayerSetup::CModelListModel::Update( void )
 
 	// Get file list
 	// search in basedir too, because that's how GoldSrc does this
-	filenames = EngFuncs::GetFilesList(  "models/player/*", &numFiles, FALSE );
+	filenames = EngFuncs::GetFilesList(  "models/player/*", &numFiles, false );
 
 	// build the model list
 	for( i = 0; i < numFiles; i++ )
@@ -305,7 +235,7 @@ void CMenuPlayerSetup::CLogosListModel::Update( )
 	RemoveAll();
 
 	// Get file list
-	filenames = EngFuncs::GetFilesList( "logos/*.*", &numFiles, FALSE );
+	filenames = EngFuncs::GetFilesList( "logos/*.*", &numFiles, false );
 
 	// build the model list
 	for( i = 0; i < numFiles; i++ )
@@ -385,40 +315,56 @@ void CMenuPlayerSetup::UpdateModel()
 void CMenuPlayerSetup::UpdateLogo()
 {
 	const int pos = logo.GetCurrentValue();
-
-	logoImage.color = &g_LogoColors[0];
-	logoColor.SetCurrentValue( L( g_LogoColors[0].name ));
-	logoColor.SetGrayed( true );
+	bool colorable = false;
 
 	if( pos < 0 )
 	{
 		logoImage.hImage = 0;
-		return;
 	}
-
-	char filename[1024];
-	const int temp = logosModel.GetFullPath( filename, sizeof( filename ), pos );
-	if(( temp < 0 ) || ( temp > sizeof( filename )))
+	else
 	{
-		logoImage.hImage = 0;
-		return;
-	}
-
-	logoImage.hImage = EngFuncs::PIC_Load( filename, 0 );
-
-	if( !logosModel.IsPng( pos ))
-	{
-		CBMP *bmpFile = CBMP::LoadFile( filename );
-		if( bmpFile->GetBitmapHdr()->bitsPerPixel == 8 )
+		char filename[1024];
+		const int temp = logosModel.GetFullPath( filename, sizeof( filename ), pos );
+		if(( temp < 0 ) || ( temp > sizeof( filename )))
 		{
-			ApplyColorToLogoPreview();
-			logoColor.SetGrayed( false );
+			logoImage.hImage = 0;
 		}
-		delete bmpFile;
+		else
+		{
+			logoImage.hImage = EngFuncs::PIC_Load( filename, 0 );
+
+			if( !logosModel.IsPng( pos ))
+			{
+				CBMP *bmpFile = CBMP::LoadFile( filename );
+				if( bmpFile->GetBitmapHdr()->bitsPerPixel == 8 )
+					colorable = true;
+				delete bmpFile;
+			}
+		}
 	}
 
-	EngFuncs::CvarSetString( "cl_logofile", logo.GetCurrentString( ));
-	logoColor.WriteCvar();
+	m_logoColorable    = colorable;
+	logoImage.colorable    = m_logoColorable;
+	logoImage.stripes      = m_stripes;
+	logoImage.stripeCount  = m_stripeCount;
+	logoImage.horizontal   = &m_horizontal;
+
+	btnChooseColor.SetGrayed( !m_logoColorable );
+}
+
+void CMenuPlayerSetup::ShowColorPicker()
+{
+	if( !m_logoColorable )
+		return;
+
+	colorPickerDlg.Show( m_stripes, m_stripeCount, m_horizontal, logoImage.hImage );
+}
+
+void CMenuPlayerSetup::OnColorPickerOk()
+{
+	colorPickerDlg.GetStripes( m_stripes, m_stripeCount, m_horizontal );
+	EngFuncs::CvarSetValue( "ui_logohorizontal", m_horizontal ? 1.f : 0.f );
+	ApplyColorToLogoPreview();
 }
 
 void CMenuPlayerSetup::ApplyColorToImagePreview()
@@ -429,19 +375,55 @@ void CMenuPlayerSetup::ApplyColorToImagePreview()
 
 void CMenuPlayerSetup::ApplyColorToLogoPreview()
 {
-	const char *logoColorStr = logoColor.GetCurrentString();
+	logoImage.colorable = m_logoColorable;
+	logoImage.stripes = m_stripes;
+	logoImage.stripeCount = m_stripeCount;
+	logoImage.horizontal = &m_horizontal;
+}
 
-	for( size_t i = 0; i < V_ARRAYSIZE( g_LogoColors ) && logoColorStr; i++ )
+void CMenuPlayerSetup::ParseLogoColorCvar()
+{
+	m_stripeCount = 1;
+	m_stripes[0][0] = m_stripes[0][1] = m_stripes[0][2] = 255;
+
+	const char *logoColor = EngFuncs::GetCvarString( "cl_logocolor" );
+	if( !logoColor || !*logoColor )
+		return;
+
+	int parsed = 0;
+	const char *p = logoColor;
+	while( parsed < MAX_LOGO_STRIPES )
 	{
-		if( !stricmp( logoColorStr, L( g_LogoColors[i].name )))
-		{
-			logoImage.color = &g_LogoColors[i];
-			return;
-		}
+		int r, g, b, n = 0;
+		while( *p == ' ' || *p == '\t' || *p == ',' )
+			p++;
+		if( !*p )
+			break;
+		if( sscanf( p, "%d %d %d%n", &r, &g, &b, &n ) != 3 || n <= 0 )
+			break;
+		m_stripes[parsed][0] = (byte)Q_max( 0, Q_min( 255, r ));
+		m_stripes[parsed][1] = (byte)Q_max( 0, Q_min( 255, g ));
+		m_stripes[parsed][2] = (byte)Q_max( 0, Q_min( 255, b ));
+		parsed++;
+		p += n;
 	}
 
-	logoColor.SetCurrentValue( L( g_LogoColors[0].name ) );
-	logoImage.color = &g_LogoColors[0];
+	if( parsed > 0 )
+		m_stripeCount = parsed;
+}
+
+void CMenuPlayerSetup::WriteLogoColorCvar()
+{
+	CUtlString s;
+	for( int i = 0; i < m_stripeCount; i++ )
+	{
+		if( i > 0 )
+			s += " ";
+		CUtlString triple;
+		triple.Format( "%d %d %d", m_stripes[i][0], m_stripes[i][1], m_stripes[i][2] );
+		s += triple;
+	}
+	EngFuncs::CvarSetString( "cl_logocolor", s.String() );
 }
 
 void CMenuPlayerSetup::WriteNewLogo( void )
@@ -479,17 +461,21 @@ void CMenuPlayerSetup::WriteNewLogo( void )
 			return;
 
 		// remap logo if needed
-		if( logoImage.color->stripes >= 1 )
-			bmpFile->RemapLogo( logoImage.color->stripes, logoImage.color->rgb );
+		if( m_logoColorable )
+			bmpFile->RemapLogo( m_stripeCount, &m_stripes[0][0], m_horizontal );
 
-		EngFuncs::COM_SaveFile( "logos/remapped.bmp", bmpFile->GetBitmap(), bmpFile->GetBitmapHdr()->fileSize );
+		bmpFile->Save( "logos/remapped.bmp" );
 		EngFuncs::CvarSetString( "cl_logoext", "bmp" );
 
 		delete bmpFile;
 	}
 
+	if( m_logoColorable )
+		WriteLogoColorCvar();
+
 	logo.WriteCvar();
-	logoColor.WriteCvar();
+
+	EngFuncs::CvarSetValue( "@cl_logoupdate", !EngFuncs::GetCvarFloat( "@cl_logoupdate" ));
 }
 
 /*
@@ -502,6 +488,14 @@ void CMenuPlayerSetup::_Init( void )
 	int addFlags = 0;
 
 	hideModels = hideLogos = false;
+
+	ParseLogoColorCvar();
+	m_horizontal = EngFuncs::GetCvarFloat( "ui_logohorizontal" ) != 0.f;
+	m_logoColorable = false;
+	logoImage.stripes = m_stripes;
+	logoImage.stripeCount = m_stripeCount;
+	logoImage.horizontal = &m_horizontal;
+	logoImage.colorable = false;
 
 	// disable playermodel preview for HLRally to prevent crash
 	if( !stricmp( gMenu.m_gameinfo.gamefolder, "hlrally" ))
@@ -613,24 +607,21 @@ void CMenuPlayerSetup::_Init( void )
 		}
 		else
 		{
-			static const char *itemlist[V_ARRAYSIZE( g_LogoColors )];
-			static CStringArrayModel colors( itemlist, V_ARRAYSIZE( g_LogoColors ) );
-			for( size_t i = 0; i < V_ARRAYSIZE( g_LogoColors ); i++ )
-				itemlist[i] = L( g_LogoColors[i].name );
+		logoImage.szName = L( "GameUI_SpraypaintImage" );
+		logoImage.SetRect( 460, 370, 200, 200 );
 
-			logoImage.szName = L( "Spraypaint image" );
-			logoImage.SetRect( 460, 370, 200, 200 );
+		logo.Setup( &logosModel );
+		logo.LinkCvar( "cl_logofile", CMenuEditable::CVAR_STRING );
+		logo.onChanged = VoidCb( &CMenuPlayerSetup::UpdateLogo );
+		logo.SetRect( 460, logoImage.pos.y + logoImage.size.h + UI_OUTLINE_WIDTH, 200, 32 );
 
-			logo.Setup( &logosModel );
-			logo.LinkCvar( "cl_logofile", CMenuEditable::CVAR_STRING );
-			logo.onChanged = VoidCb( &CMenuPlayerSetup::UpdateLogo );
-			logo.SetRect( 460, logoImage.pos.y + logoImage.size.h + UI_OUTLINE_WIDTH, 200, 32 );
+		btnChooseColor.szName = L( "Choose logo color" );
+		btnChooseColor.SetRect( 460, logo.pos.y + logo.size.h + UI_OUTLINE_WIDTH, 200, 32 );
+		btnChooseColor.onReleased = VoidCb( &CMenuPlayerSetup::ShowColorPicker );
 
-			logoColor.Setup( &colors );
-			logoColor.LinkCvar( "cl_logocolor", CMenuEditable::CVAR_STRING );
-			logoColor.onChanged = VoidCb( &CMenuPlayerSetup::ApplyColorToLogoPreview );;
-			logoColor.SetRect( 460, logo.pos.y + logo.size.h + UI_OUTLINE_WIDTH, 200, 32 );
-		}
+		colorPickerDlg.Link( this );
+		colorPickerDlg.onOk = VoidCb( &CMenuPlayerSetup::OnColorPickerOk );
+	}
 	}
 
 	AddItem( name );
@@ -643,7 +634,7 @@ void CMenuPlayerSetup::_Init( void )
 	{
 		UpdateLogo();
 		AddItem( logo );
-		AddItem( logoColor );
+		AddItem( btnChooseColor );
 		AddItem( logoImage );
 	}
 
@@ -664,8 +655,14 @@ void CMenuPlayerSetup::_Init( void )
 
 void CMenuPlayerSetup::Reload()
 {
-	if( !hideLogos ) UpdateLogo();
+	if( !hideLogos )
+	{
+		ParseLogoColorCvar();
+		m_horizontal = EngFuncs::GetCvarFloat( "ui_logohorizontal" ) != 0.f;
+		UpdateLogo();
+	}
 	if( !hideModels ) UpdateModel();
 }
+
 
 ADD_MENU( menu_playersetup, CMenuPlayerSetup, UI_PlayerSetup_Menu );

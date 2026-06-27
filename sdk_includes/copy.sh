@@ -12,10 +12,10 @@ FILES_LIST=" \
 	common/entity_types.h \
 	common/event_args.h \
 	common/gameinfo.h \
-	common/kbutton.h \
-	common/mathlib.h \
 	common/netadr.h \
 	common/net_api.h \
+	common/port.h \
+	common/q_client.h \
 	common/ref_params.h \
 	common/weaponinfo.h \
 	common/wrect.h \
@@ -25,9 +25,8 @@ FILES_LIST=" \
 	engine/menu_int.h \
 	engine/mobility_int.h \
 	engine/cursor_type.h \
-	public/build.h \
-	public/buildenums.h \
 	pm_shared/pm_info.h \
+	public/xash3d_mathlib.h \
 "
 
 die()
@@ -44,3 +43,7 @@ for i in $FILES_LIST; do
 	cp ../../../$i $dir/ || die "Can't copy file $1"
 	echo "OK"
 done
+
+mkdir -p public
+cp ../../library_suffix/include/build.h public/ || die "Can't copy build.h"
+cp ../../library_suffix/include/buildenums.h public/ || die "Can't copy buildenums.h"

@@ -8,7 +8,7 @@ of the License, or (at your option) any later version.
 
 This program is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 
 See the GNU General Public License for more details.
 
@@ -49,6 +49,22 @@ private:
 	char elapsed_time[CS_SIZE];
 };
 
+/*
+============
+COM_CompareSaves
+============
+*/
+static int COM_CompareSaves( const void *a, const void *b )
+{
+	const char *file1 = *((const char **)a);
+	const char *file2 = *((const char **)b);
+	int bResult = 0;
+
+	EngFuncs::CompareFileTime( file2, file1, &bResult );
+
+	return bResult;
+}
+
 class CMenuSavePreview : public CMenuBaseItem
 {
 public:
@@ -67,7 +83,9 @@ public:
 		{
 			char path[128];
 			snprintf( path, sizeof( path ), "save/%s.bmp", name );
-			saveshot.Load( path );
+			saveshot.ForceUnload();
+			if( EngFuncs::FileExists( path, true ) )
+				saveshot.Load( path );
 
 			if( saveshot.IsValid( ))
 			{
@@ -178,10 +196,10 @@ void CMenuSavesListModel::Update( void )
 	int numFiles;
 
 	RemoveAll();
-	filenames = EngFuncs::GetFilesList( "save/*.sav", &numFiles, TRUE );
+	filenames = EngFuncs::GetFilesList( "save/*.sav", &numFiles, true );
 
 	// sort the saves in reverse order (oldest past at the end)
-	qsort( filenames, numFiles, sizeof( *filenames ), (cmpfunc)COM_CompareSaves );
+	qsort( filenames, numFiles, sizeof( *filenames ), COM_CompareSaves );
 
 	if( parent->IsSaveMode( ) && CL_IsActive( ))
 	{
@@ -258,7 +276,15 @@ void CMenuSavesListModel::Update( void )
 			Q_strncpy( s, title, sizeof( s ));
 
 			if( type )
-				snprintf( save.comment, sizeof( save.comment ), "[%.16s]%s", type, L( s ));
+			{
+				// Localize known save-type identifiers (quick/autosave). Otherwise, fall back to original behavior.
+				if( !stricmp( type, "quick" ))
+					snprintf( save.comment, sizeof( save.comment ), "%s%s", L( "GameUI_QuickSave" ), L( s ));
+				else if( !stricmp( type, "autosave" ))
+					snprintf( save.comment, sizeof( save.comment ), "%s%s", L( "GameUI_AutoSave" ), L( s ));
+				else
+					snprintf( save.comment, sizeof( save.comment ), "[%.16s]%s", type, L( s ));
+			}
 			else Q_strncpy( save.comment, L( s ), sizeof( save.comment ));
 		}
 		else
@@ -280,16 +306,15 @@ void CMenuSavesListModel::Update( void )
 
 	if( !parent->IsSaveMode( ))
 	{
-		parent->levelShot.SetSaveName( IsValidIndex( 0 ) ? Element( 0 ).name : nullptr );
 		parent->load.SetGrayed( !IsValidIndex( 0 ) );
 	}
 	else
 	{
-		parent->levelShot.SetSaveName( nullptr );
 		parent->save.SetGrayed( !IsValidIndex( 0 ) || !CL_IsActive( ));
 	}
 
 	parent->remove.SetGrayed( !IsValidIndex( 0 ));
+	parent->UpdateGame();
 }
 
 void CMenuSavesListModel::OnDeleteEntry( int line )
@@ -359,7 +384,7 @@ void CMenuLoadGame::LoadGame()
 
 	snprintf( cmd, sizeof( cmd ), "load \"%s\"\n", name );
 	EngFuncs::StopBackgroundTrack( );
-	EngFuncs::ClientCmd( FALSE, cmd );
+	EngFuncs::ClientCmd( false, cmd );
 	UI_CloseMenu();
 }
 
@@ -375,7 +400,7 @@ void CMenuLoadGame::SaveGame()
 	EngFuncs::PIC_Free( cmd );
 
 	snprintf( cmd, sizeof( cmd ), "save \"%s\"\n", name );
-	EngFuncs::ClientCmd( FALSE, cmd );
+	EngFuncs::ClientCmd( false, cmd );
 	UI_CloseMenu();
 }
 
@@ -403,7 +428,7 @@ void CMenuLoadGame::DeleteGame()
 	const char *name = savesListModel[savesList.GetCurrentIndex( )].name;
 
 	snprintf( cmd, sizeof( cmd ), "killsave \"%s\"\n", name );
-	EngFuncs::ClientCmd( TRUE, cmd );
+	EngFuncs::ClientCmd( true, cmd );
 
 	snprintf( cmd, sizeof( cmd ), "save/%s.bmp", name );
 	EngFuncs::PIC_Free( cmd );
