@@ -30,6 +30,8 @@ public:
 	void VidInit( void ) override;
 	bool KeyUp( int key ) override;
 	bool KeyDown( int key ) override;
+	void Char( int key ) override;
+	void _Event( int ev ) override;
 	void Draw( void ) override;
 	void UpdateEditable() override;
 
@@ -50,6 +52,8 @@ private:
 	const char *MoveLeft();
 	const char *MoveRight();
 	void Display();
+	void SyncEditFromValue(); // refresh the edit buffer/display from the current value
+	void SyncValueFromEdit(); // parse the edit buffer into the value/cvar (clamped)
 
 	CImage m_szBackground;
 	CImage m_szLeftArrow;
@@ -65,6 +69,9 @@ private:
 	short m_iFloatPrecision;
 
 	char m_szDisplay[CS_SIZE];
+
+	bool m_bEditing;          // user is typing a value directly
+	char m_szEdit[CS_SIZE];   // in-progress typed text (numeric mode only)
 };
 
 #endif // MENU_SPINCONTROL_H

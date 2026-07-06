@@ -23,7 +23,7 @@ GNU General Public License for more details.
 CMenuSpinControl::CMenuSpinControl()  : BaseClass(), m_szBackground(),
 		m_szLeftArrow(), m_szRightArrow(), m_szLeftArrowFocus(), m_szRightArrowFocus(),
 		m_flMinValue(0), m_flMaxValue(1), m_flCurValue(0), m_flRange(0.1), m_pModel( NULL ),
-		m_iFloatPrecision(0)
+		m_iFloatPrecision(0), m_bEditing(false)
 {
 	m_szBackground = 0;
 	m_szLeftArrow = UI_LEFTARROW;
@@ -31,6 +31,7 @@ CMenuSpinControl::CMenuSpinControl()  : BaseClass(), m_szBackground(),
 	m_szRightArrow = UI_RIGHTARROW;
 	m_szRightArrowFocus = UI_RIGHTARROWFOCUS;
 	m_szDisplay[0] = 0;
+	m_szEdit[0] = 0;
 
 	eTextAlignment = QM_CENTER;
 	eFocusAnimation = QM_HIGHLIGHTIFFOCUS;
@@ -53,6 +54,35 @@ bool CMenuSpinControl::KeyDown( int key )
 {
 	const char *sound = 0;
 
+	// Direct numeric entry for numeric spin controls (not list/model based).
+	// This mirrors CMenuField: while focused the value is the live edit buffer, so
+	// the caret is shown, typing appends and backspace deletes the last digit.
+	if( !m_pModel && m_bEditing && !FBitSet( iFlags, QMF_MOUSEONLY ))
+	{
+		if( UI::Key::IsBackspace( key ))
+		{
+			int len = (int)strlen( m_szEdit );
+			if( len > 0 )
+				m_szEdit[len - 1] = 0;
+			Q_strncpy( m_szDisplay, m_szEdit, sizeof( m_szDisplay ));
+			SyncValueFromEdit();
+			PlayLocalSound( uiStatic.sounds[SND_MOVE] );
+			return true;
+		}
+
+		if( UI::Key::IsEnter( key ))
+		{
+			SyncValueFromEdit(); // commit typed value (clamped)
+			SyncEditFromValue(); // canonicalize the buffer/display, stay editing
+			PlayLocalSound( uiStatic.sounds[SND_MOVE] );
+			return true; // consume so Enter doesn't trigger the default action
+		}
+
+		// an arrow first commits whatever is typed, then nudges
+		if( UI::Key::IsLeftArrow( key ) || UI::Key::IsRightArrow( key ))
+			SyncValueFromEdit();
+	}
+
 	if( UI::Key::IsLeftArrow( key ) && !FBitSet( iFlags, QMF_MOUSEONLY ))
 		sound = MoveLeft();
 	else if( UI::Key::IsRightArrow( key ) && !FBitSet( iFlags, QMF_MOUSEONLY ))
@@ -67,8 +97,86 @@ bool CMenuSpinControl::KeyDown( int key )
 			_Event( QM_CHANGED );
 		}
 		PlayLocalSound( sound );
+
+		// keep the edit buffer in sync with the value the arrows produced
+		if( !m_pModel && m_bEditing )
+			SyncEditFromValue();
 	}
 	return sound != NULL;
+}
+
+void CMenuSpinControl::Char( int key )
+{
+	if( m_pModel || !m_bEditing ) // only numeric spin controls accept typing
+		return;
+
+	bool accept = false;
+	if( key >= '0' && key <= '9' )
+		accept = true;
+	else if( key == '.' && m_iFloatPrecision > 0 && !strchr( m_szEdit, '.' ))
+		accept = true;
+	else if( key == '-' && m_flMinValue < 0 && m_szEdit[0] == 0 )
+		accept = true;
+
+	if( !accept )
+		return;
+
+	int len = (int)strlen( m_szEdit );
+	if( len >= (int)sizeof( m_szEdit ) - 1 )
+		return;
+
+	// append at the end (the caret is drawn after the value)
+	m_szEdit[len] = (char)key;
+	m_szEdit[len + 1] = 0;
+	Q_strncpy( m_szDisplay, m_szEdit, sizeof( m_szDisplay ));
+	SyncValueFromEdit();
+}
+
+void CMenuSpinControl::_Event( int ev )
+{
+	switch( ev )
+	{
+	case QM_GOTFOCUS:
+		if( !m_pModel )
+		{
+			UI_EnableTextInput( true );
+			m_bEditing = true;
+			SyncEditFromValue(); // seed the buffer so the value is editable + caret shown
+		}
+		break;
+	case QM_LOSTFOCUS:
+		if( m_bEditing )
+		{
+			SyncValueFromEdit(); // commit typed value (clamped)
+			m_bEditing = false;
+			Display();           // show the final, canonical value
+		}
+		if( !m_pModel )
+			UI_EnableTextInput( false );
+		break;
+	}
+
+	BaseClass::_Event( ev );
+}
+
+void CMenuSpinControl::SyncEditFromValue()
+{
+	snprintf( m_szEdit, sizeof( m_szEdit ), "%.*f", m_iFloatPrecision, m_flCurValue );
+	Q_strncpy( m_szDisplay, m_szEdit, sizeof( m_szDisplay ));
+}
+
+void CMenuSpinControl::SyncValueFromEdit()
+{
+	float v = (float)atof( m_szEdit );
+
+	if( v < m_flMinValue ) v = m_flMinValue;
+	if( v > m_flMaxValue ) v = m_flMaxValue;
+
+	bool notify = ( m_flCurValue != v );
+	m_flCurValue = v;
+	SetCvarValue( v ); // update value/cvar without reformatting the typed display
+	if( notify )
+		_Event( QM_CHANGED );
 }
 
 /*
@@ -84,6 +192,10 @@ bool CMenuSpinControl::KeyUp( int key )
 
 	if( UI::Key::IsLeftMouse( key ) && FBitSet( iFlags, QMF_HASMOUSEFOCUS ))
 	{
+		// clicking an arrow commits any typed value first, then nudges
+		if( !m_pModel && m_bEditing )
+			SyncValueFromEdit();
+
 		// calculate size and position for the arrows
 		arrow.w = m_scSize.h + UI_OUTLINE_WIDTH * 2 * uiStatic.scaleX;
 		arrow.h = m_scSize.h + UI_OUTLINE_WIDTH * 2 * uiStatic.scaleY;
@@ -109,6 +221,10 @@ bool CMenuSpinControl::KeyUp( int key )
 			_Event( QM_CHANGED );
 		}
 		PlayLocalSound( sound );
+
+		// keep the edit buffer in sync with the value the arrows produced
+		if( !m_pModel && m_bEditing )
+			SyncEditFromValue();
 	}
 	return sound != NULL;
 }
@@ -217,6 +333,27 @@ void CMenuSpinControl::Draw( void )
 		UI_DrawPic( left, arrow, (leftFocus) ? color : (int)colorBase, (leftFocus) ? m_szLeftArrowFocus : m_szLeftArrow );
 		UI_DrawPic( right, arrow, (rightFocus) ? color : (int)colorBase, (rightFocus) ? m_szRightArrowFocus : m_szRightArrow );
 	}
+
+	// Numeric spinners edit like text fields: show a blinking caret whenever focused
+	// (m_bEditing is set on focus). Gated to numeric mode so list spinners are unaffected.
+	if( !m_pModel && m_bEditing && ( uiStatic.realTime & 499 ) < 250 )
+	{
+		const char *cursor_char = "_";
+		int textW  = g_FontMgr->GetTextWideScaled( font, m_szDisplay, m_scChSize );
+		int caretW = g_FontMgr->GetTextWideScaled( font, cursor_char, m_scChSize );
+		int caretX;
+
+		if( eTextAlignment & QM_LEFT )
+			caretX = scCenterPos.x + textW;
+		else if( eTextAlignment & QM_RIGHT )
+			caretX = scCenterPos.x + scCenterBox.w - caretW;
+		else // QM_CENTER
+			caretX = scCenterPos.x + ( scCenterBox.w + textW ) / 2;
+
+		UI::Scissor::PushScissor( scCenterPos, scCenterBox );
+		UI_DrawString( font, caretX, m_scPos.y, caretW, m_scSize.h, cursor_char, colorFocus, m_scChSize, QM_LEFT, textflags | ETF_FORCECOL );
+		UI::Scissor::PopScissor();
+	}
 }
 
 const char *CMenuSpinControl::MoveLeft()
@@ -253,6 +390,9 @@ const char *CMenuSpinControl::MoveRight()
 
 void CMenuSpinControl::UpdateEditable()
 {
+	if( m_bEditing ) // don't clobber a value the user is typing
+		return;
+
 	switch( m_eType )
 	{
 	case CVAR_STRING:
