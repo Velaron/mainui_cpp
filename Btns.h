@@ -1,6 +1,7 @@
 /*
-menu_btnsbmp_table.h - btns_main layout
+Btns.h - WON menu buttons atlas manager
 Copyright (C) 2011 CrazyRussian
+Copyright (C) Xash3D FWGS contributors
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -13,9 +14,11 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 */
 
-#ifndef MENU_BTNSBMP_TABLE_H
-#define MENU_BTNSBMP_TABLE_H
-	
+#ifndef BTNS_H
+#define BTNS_H
+
+#include "enginecallback_menu.h"
+
 enum EDefaultBtns
 {
 	PC_NEW_GAME = 0,
@@ -97,11 +100,42 @@ enum EDefaultBtns
 #define PC_TOUCH         "gfx/shell/btn_touch"
 #define PC_TOUCH_OPTIONS "gfx/shell/btn_touch_options"
 #define PC_TOUCH_BUTTONS "gfx/shell/btn_touch_buttons"
+#define PC_TOUCH_SAVE    "gfx/shell/btn_touch_save"
+#define PC_TOUCH_EDITOR  "gfx/shell/btn_touch_editor"
+#define PC_TOUCH_SELECT  "gfx/shell/btn_touch_select"
+#define PC_TOUCH_RESET   "gfx/shell/btn_touch_reset"
 #define PC_FAVORITE      "gfx/shell/btn_favorite"
 #define PC_UNFAVORITE    "gfx/shell/btn_unfavorite"
+#define PC_GYRO          "gfx/shell/btn_gyro"
 
 #define BUTTON_NOFOCUS	0
 #define BUTTON_FOCUS	1
 #define BUTTON_PRESSED	2
 
-#endif//MENU_BTNSBMP_TABLE_H
+class CBtnsManager
+{
+public:
+	CBtnsManager() : pics{}, x{}, y{}, width( 0 ), height( 0 ), tex_h( 0 ), tex_stride( 0 ) {}
+
+	void LoadBmpButtons();
+
+	HIMAGE GetPic( int id ) const { return pics[id]; }
+	int GetWidth() const { return width; }
+	int GetHeight() const { return height; }
+	int GetTexH() const { return tex_h; }
+	int GetTexStride() const { return tex_stride; }
+	int GetX( int id ) const { return x[id]; }
+	int GetY( int id ) const { return y[id]; }
+
+private:
+	HIMAGE	pics[PC_BUTTONCOUNT];
+
+	int		width;      // per-button width from BMP
+	int		height;     // virtual button height for layout (26)
+	int		tex_h;      // actual texture height per button state
+	int		tex_stride; // step between states in atlas (tex_h + guard)
+	int		x[PC_BUTTONCOUNT]; // x position in atlas
+	int		y[PC_BUTTONCOUNT]; // y position in atlas
+};
+
+#endif // BTNS_H

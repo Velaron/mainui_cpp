@@ -32,10 +32,13 @@ typedef int		HIMAGE;		// handle to a graphic
 #define PIC_KEEP_SOURCE	(1<<1)		// some images keep source
 #define PIC_NOFLIP_TGA	(1<<2)		// Steam background completely ignore tga attribute 0x20
 #define PIC_EXPAND_SOURCE (1<<3)		// don't keep as 8-bit source, expand to RGBA
+#define PIC_NOMIPMAP	(1<<12)		// disable mipmaps
+#define PIC_HAS_ALPHA	(1<<16)		// image has alpha channel
 
 // flags for COM_ParseFileSafe
 #define PFILE_IGNOREBRACKET (1<<0)
 #define PFILE_HANDLECOLON   (1<<1)
+#define PFILE_IGNOREHASHCMT (1<<2)
 
 typedef struct ui_globalvars_s
 {
@@ -76,7 +79,7 @@ typedef struct ui_enginefuncs_s
 	// cvar handlers
 	cvar_t*	(*pfnRegisterVariable)( const char *szName, const char *szValue, int flags );
 	float	(*pfnGetCvarFloat)( const char *szName );
-	const char*	(*pfnGetCvarString)( const char *szName );
+	const char*	(*pfnGetCvarString)( const char *szName ) PFN_RETURNS_NONNULL;
 	void	(*pfnCvarSetString)( const char *szName, const char *szValue );
 	void	(*pfnCvarSetValue)( const char *szName, float flValue );
 
@@ -85,14 +88,14 @@ typedef struct ui_enginefuncs_s
 	void	(*pfnClientCmd)( int execute_now, const char *szCmdString );
 	void	(*pfnDelCommand)( const char *cmd_name );
 	int (*pfnCmdArgc)( void );
-	const char*	(*pfnCmdArgv)( int argc );
-	const char*	(*pfnCmd_Args)( void );
+	const char*	(*pfnCmdArgv)( int argc ) PFN_RETURNS_NONNULL;
+	const char*	(*pfnCmd_Args)( void ) PFN_RETURNS_NONNULL;
 
 	// debug messages (in-menu shows only notify)
-	void	(*Con_Printf)( const char *fmt, ... ) _format( 1 );
-	void	(*Con_DPrintf)( const char *fmt, ... )  _format( 1 );
-	void	(*Con_NPrintf)( int pos, const char *fmt, ... )  _format( 2 );
-	void	(*Con_NXPrintf)( struct con_nprint_s *info, const char *fmt, ... ) _format( 2 );
+	void	(*Con_Printf)( const char *fmt, ... ) FORMAT_CHECK( 1 );
+	void	(*Con_DPrintf)( const char *fmt, ... )  FORMAT_CHECK( 1 );
+	void	(*Con_NPrintf)( int pos, const char *fmt, ... )  FORMAT_CHECK( 2 );
+	void	(*Con_NXPrintf)( struct con_nprint_s *info, const char *fmt, ... ) FORMAT_CHECK( 2 );
 
 	// sound handlers
 	void	(*pfnPlayLocalSound)( const char *szSound );
@@ -118,7 +121,7 @@ typedef struct ui_enginefuncs_s
 	int	(*CL_CreateVisibleEntity)( int type, struct cl_entity_s *ent );
 
 	// misc handlers
-	void	(*pfnHostError)( const char *szFmt, ... ) _format( 1 );
+	void	(*pfnHostError)( const char *szFmt, ... ) FORMAT_CHECK( 1 );
 	int	(*pfnFileExists)( const char *filename, int gamedironly );
 	void	(*pfnGetGameDir)( char *szGetGameDir );
 
@@ -209,23 +212,28 @@ typedef struct ui_extendedfuncs_s {
 
 	// new engine extended api start here
 	// returns 1 if there are more in list, otherwise 0
-	int (*pfnGetRenderers)( unsigned int num, char *shortName, size_t size1, char *readableName, size_t size2 );
+	int (*pfnGetRenderers)( unsigned int num, char *short_name, size_t size1, char *long_name, size_t size2 );
 	double (*pfnDoubleTime)( void );
 	char *(*pfnParseFile)( char *data, char *buf, const int size, unsigned int flags, int *len );
 
 	// network address funcs
-	const char *(*pfnAdrToString)( const struct netadr_s a );
+	const char *(*pfnAdrToString)( const struct netadr_s a ) PFN_RETURNS_NONNULL;
 	int (*pfnCompareAdr)( const void *a, const void *b ); // netadr_t
 	void *(*pfnGetNativeObject)( const char *name );
 	struct net_api_s *pNetAPI;
 
 	// new mods info
 	gameinfo2_t *(*pfnGetGameInfo)( int gi_version ); // might return NULL if gi_version is unsupported
-	gameinfo2_t *(*pfnGetModInfo)( int gi_version, int mod_index ); // continiously call it until it returns null
+	gameinfo2_t *(*pfnGetModInfo)( int gi_version, int mod_index ); // continuously call it until it returns null
 
 	// returns 1 if cvar has read-only flag
 	// or -1 if cvar not found
 	int (*pfnIsCvarReadOnly)( const char *name );
+
+	// tells the engine where the menu edits the text, in screen coordinates
+	// engine tries to keep this rect visible, when the on-screen keyboard covers the screen
+	// must be called before pfnEnableTextInput( true ), empty rect means the whole screen
+	void (*pfnSetTextInputRect)( int x, int y, int w, int h );
 } ui_extendedfuncs_t;
 
 // deprecated export from old engine

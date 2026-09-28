@@ -160,7 +160,6 @@ void CMenuSlider::Draw( void )
 		coord.x = m_scPos.x + 16 * uiStatic.scaleX;
 		coord.y = m_scPos.y + m_scSize.h / 2 - EngFuncs::ConsoleCharacterHeight() / 2;
 
-
 		int	r, g, b;
 
 		UnpackRGB( r, g, b, uiColorHelp );
@@ -209,7 +208,7 @@ void CMenuSlider::Draw( void )
 
 void CMenuSlider::UpdateEditable()
 {
-	float flValue = EngFuncs::GetCvarFloat( m_szCvarName );
+	float flValue = CvarValue();
 
 	m_flCurValue = flValue;
 }

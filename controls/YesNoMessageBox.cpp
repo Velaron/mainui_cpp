@@ -74,7 +74,7 @@ CMenuYesNoMessageBox::CMenuYesNoMessageBox( bool alert ) : BaseClass( "YesNoMess
 CMenuYesNoMessageBox::Init
 ==============
 */
-void CMenuYesNoMessageBox::_Init( void )
+void CMenuYesNoMessageBox::_Init()
 {
 	SetRect( DLG_X + 192, 256, 640, 256 );
 
@@ -90,9 +90,6 @@ void CMenuYesNoMessageBox::_Init( void )
 	if( !(bool)onPositive )
 		onPositive = CEventCallback::NoopCb;
 
-	background.bForceColor = true;
-	background.colorBase = uiPromptBgColor;
-	AddItem( background );
 	AddItem( dlgMessage1 );
 	AddItem( yes );
 
@@ -106,14 +103,13 @@ void CMenuYesNoMessageBox::_Init( void )
 CMenuYesNoMessageBox::VidInit
 ==============
 */
-void CMenuYesNoMessageBox::_VidInit( void )
+void CMenuYesNoMessageBox::_VidInit()
 {
+	SetRect( DLG_X + 192, 256, 640, 256 );
 	pos.x += uiStatic.xOffset;
 	pos.y += uiStatic.yOffset;
 	CalcPosition();
 	CalcSizes();
-
-
 }
 
 /*
@@ -121,9 +117,13 @@ void CMenuYesNoMessageBox::_VidInit( void )
 CMenuYesNoMessageBox::Draw
 ==============
 */
-void CMenuYesNoMessageBox::Draw( void )
+void CMenuYesNoMessageBox::Draw()
 {
-	UI_FillRect( 0,0, gpGlobals->scrWidth, gpGlobals->scrHeight, 0x40000000 );
+	UI_FillRect( 0, 0, gpGlobals->scrWidth, gpGlobals->scrHeight, 0x40000000 );
+
+	EngFuncs::FillRGBA( m_scPos.x, m_scPos.y, m_scSize.w, m_scSize.h, 20, 20, 20, 235 );
+	UI_DrawRectangle( m_scPos, m_scSize, uiInputFgColor );
+
 	CMenuBaseWindow::Draw();
 }
 
@@ -194,8 +194,8 @@ void CMenuYesNoMessageBox::HighlightChoice( EHighlight yesno )
 	}
 	else
 	{
-		yes.bPulse = yesno == HIGHLIGHT_YES ? true : false;
-		no.bPulse = yesno == HIGHLIGHT_NO ? true : false;
+		yes.bPulse = yesno == HIGHLIGHT_YES;
+		no.bPulse = yesno == HIGHLIGHT_NO;
 	}
 }
 
@@ -235,7 +235,7 @@ void UI_ShowMessageBox( const char *text )
 	if( !UI_IsVisible() )
 	{
 		UI_Main_Menu();
-		UI_SetActiveMenu( TRUE );
+		UI_SetActiveMenu( true );
 	}
 
 	if( strstr( msg, "m_ignore") || strstr( msg, "touch_enable" ) || strstr( msg, "joy_enable" ) )
@@ -263,7 +263,7 @@ void UI_ShowMessageBox( const char *text )
 	msgBox.Show();
 }
 
-void UI_ShowMessageBox_f( void )
+void UI_ShowMessageBox_f()
 {
 	UI_ShowMessageBox( EngFuncs::CmdArgv(1) );
 }

@@ -1,16 +1,30 @@
 /*
-build.h - compile-time build information
-Copyright (C) 2023 Alibek Omarov
+buildenums.h - platforms/architectures enumeration values
 
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+This is free and unencumbered software released into the public domain.
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+Anyone is free to copy, modify, publish, use, compile, sell, or
+distribute this software, either in source code form or as a compiled
+binary, for any purpose, commercial or non-commercial, and by any
+means.
+
+In jurisdictions that recognize copyright laws, the author or authors
+of this software dedicate any and all copyright interest in the
+software to the public domain. We make this dedication for the benefit
+of the public at large and to the detriment of our heirs and
+successors. We intend this dedication to be an overt act of
+relinquishment in perpetuity of all present and future rights to this
+software under copyright law.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+OTHER DEALINGS IN THE SOFTWARE.
+
+For more information, please refer to <http://unlicense.org/>
 */
 #pragma once
 #ifndef BUILDENUMS_H
@@ -34,7 +48,7 @@ GNU General Public License for more details.
 #define PLATFORM_APPLE      5
 #define PLATFORM_NETBSD     6
 #define PLATFORM_OPENBSD    7
-#define PLATFORM_EMSCRIPTEN 8
+// reserved
 #define PLATFORM_DOS4GW     9
 #define PLATFORM_HAIKU      10
 #define PLATFORM_SERENITY   11
@@ -43,6 +57,8 @@ GNU General Public License for more details.
 #define PLATFORM_PSVITA     14
 #define PLATFORM_WASI       15
 #define PLATFORM_SUNOS      16
+#define PLATFORM_HURD       17
+#define PLATFORM_PSP        18
 
 #if XASH_WIN32
 	#define XASH_PLATFORM PLATFORM_WIN32
@@ -58,8 +74,6 @@ GNU General Public License for more details.
 	#define XASH_PLATFORM PLATFORM_NETBSD
 #elif XASH_OPENBSD
 	#define XASH_PLATFORM PLATFORM_OPENBSD
-#elif XASH_EMSCRIPTEN
-	#define XASH_PLATFORM PLATFORM_EMSCRIPTEN
 #elif XASH_DOS4GW
 	#define XASH_PLATFORM PLATFORM_DOS4GW
 #elif XASH_HAIKU
@@ -76,6 +90,10 @@ GNU General Public License for more details.
 	#define XASH_PLATFORM PLATFORM_WASI
 #elif XASH_SUNOS
 	#define XASH_PLATFORM PLATFORM_SUNOS
+#elif XASH_HURD
+	#define XASH_PLATFORM PLATFORM_HURD
+#elif XASH_PSP
+	#define XASH_PLATFORM PLATFORM_PSP
 #else
 	#error
 #endif
@@ -89,11 +107,12 @@ GNU General Public License for more details.
 #define ARCHITECTURE_AMD64   2
 #define ARCHITECTURE_ARM     3
 #define ARCHITECTURE_MIPS    4
-#define ARCHITECTURE_JS      6
+// reserved
 #define ARCHITECTURE_E2K     7
 #define ARCHITECTURE_RISCV   8
 #define ARCHITECTURE_PPC     9
-#define ARCHITECTURE_WASM  10
+#define ARCHITECTURE_WASM    10
+#define ARCHITECTURE_SPARC   11
 
 #if XASH_AMD64
 	#define XASH_ARCHITECTURE ARCHITECTURE_AMD64
@@ -103,8 +122,6 @@ GNU General Public License for more details.
 	#define XASH_ARCHITECTURE ARCHITECTURE_ARM
 #elif XASH_MIPS
 	#define XASH_ARCHITECTURE ARCHITECTURE_MIPS
-#elif XASH_JS
-	#define XASH_ARCHITECTURE ARCHITECTURE_JS
 #elif XASH_E2K
 	#define XASH_ARCHITECTURE ARCHITECTURE_E2K
 #elif XASH_RISCV
@@ -113,6 +130,8 @@ GNU General Public License for more details.
 	#define XASH_ARCHITECTURE ARCHITECTURE_PPC
 #elif XASH_WASM
 	#define XASH_ARCHITECTURE ARCHITECTURE_WASM
+#elif XASH_SPARC
+	#define XASH_ARCHITECTURE ARCHITECTURE_SPARC
 #else
 	#error
 #endif
@@ -138,7 +157,8 @@ GNU General Public License for more details.
 //           APPLICATION BINARY INTERFACE
 //
 //================================================================
-#define BIT( n )		( 1U << ( n ))
+#define BIT( n )                    ( 1U << ( n ))
+#define FBitSet( bit_vector, bits ) (( bit_vector ) & ( bits ))
 
 #define ARCH_ARM_VER_MASK   ( BIT( 5 ) - 1 )
 #define ARCH_ARM_VER_SHIFT  0

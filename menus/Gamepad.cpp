@@ -97,10 +97,10 @@ void CMenuGamePad::GetConfig( void )
 	pitch.SetCurrentValue( fabs( _pitch ));
 	yaw.SetCurrentValue( fabs( _yaw ));
 
-	invSide.bChecked = _side < 0.0f ? true: false;
-	invFwd.bChecked = _forward < 0.0f ? true: false;
-	invPitch.bChecked = _pitch < 0.0f ? true: false;
-	invYaw.bChecked = _yaw < 0.0f ? true: false;
+	invSide.bChecked = _side < 0.0f;
+	invFwd.bChecked = _forward < 0.0f;
+	invPitch.bChecked = _pitch < 0.0f;
+	invYaw.bChecked = _yaw < 0.0f;
 
 	// I made a monster...
 	for( unsigned int i = 0; i < sizeof( binding ) - 1; i++ )
@@ -216,7 +216,7 @@ void CMenuGamePad::_Init( void )
 	}
 
 	side.Setup( 0.0f, 1.0f, 0.1f );
-	side.SetNameAndStatus( L( "Side" ), L( "Side movement sensitity" ) );
+	side.SetNameAndStatus( L( "Side" ), L( "Side movement sensitivity" ) );
 	invSide.SetNameAndStatus( L( "Invert" ), L( "Invert side movement axis" ) );
 
 	forward.Setup( 0.0f, 1.0f, 0.1f );
@@ -233,6 +233,7 @@ void CMenuGamePad::_Init( void )
 
 	AddItem( banner );
 	AddButton( L( "Controls" ), nullptr, PC_CONTROLS, UI_Controls_Menu );
+	AddButton( L( "Gyroscope" ), nullptr, PC_GYRO, UI_GamePadGyro_Menu, QMF_NOTIFY, 'g' );
 	AddButton( L( "Done" ), nullptr, PC_DONE, VoidCb( &CMenuGamePad::SaveAndPopMenu ) );	// Обе строки уже встречались ранее !!
 	for( i = 0; i < 6; i++ )
 		AddItem( axisBind[i] );

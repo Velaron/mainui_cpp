@@ -16,7 +16,7 @@ GNU General Public License for more details.
 #ifndef PRIMITIVE_H
 #define PRIMITIVE_H
 
-#define BIT( n )		( 1U << ( n ))
+#include "xash3d_mathlib.h"
 
 #ifdef _MSC_VER
 #pragma warning(disable:4244) // float->int
@@ -25,14 +25,6 @@ GNU General Public License for more details.
 template<class T>
 inline bool isrange( T min, T value, T max )
 { return (((value) >= (min))) && (((value) <= (max))); }
-
-#define bound( min, num, max )	((num) >= (min) ? ((num) < (max) ? (num) : (max)) : (min))
-#define Q_min( a, b ) (((a) < (b)) ? (a) : (b))
-#define Q_max( a, b ) (((a) < (b)) ? (b) : (a))
-
-#define SetBits( iBitVector, bits )	((iBitVector) = (iBitVector) | (bits))
-#define ClearBits( iBitVector, bits )	((iBitVector) = (iBitVector) & ~(bits))
-#define FBitSet( iBitVector, bit )	((iBitVector) & (bit))
 
 // engine constants
 

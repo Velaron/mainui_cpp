@@ -18,8 +18,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 */
 
+#include "q_client.h"
+
 #include "Framework.h"
-#include "kbutton.h"
 #include "MenuStrings.h"
 #include "Bitmap.h"
 #include "PicButton.h"
@@ -114,7 +115,7 @@ void CMenuInputDevices::_Init( void )
 	evdev.SetNameAndStatus( L( "Evdev input (root)" ), L( "Press this to enable full mouse and keyboard control on Android" ));
 	evdev.iFlags |= QMF_NOTIFY;
 	evdev.SetCoord( 72, 380 );
-	evdev.onReleased.SetCommand( FALSE, "evdev_autodetect\n" );
+	evdev.onReleased.SetCommand( false, "evdev_autodetect\n" );
 
 	//AddItem( banner );
 	AddItem( done );

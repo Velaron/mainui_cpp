@@ -18,6 +18,10 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 #pragma once
+#ifndef BMPUTILS_H
+#define BMPUTILS_H
+
+#include "xash3d_types.h"
 
 #define BI_FILE_HEADER_SIZE 14
 #define BI_SIZE	40 // size of bitmap info header.
@@ -49,6 +53,22 @@ struct rgbquad_t
 	byte g;
 	byte r;
 	byte reserved;
+};
+
+struct tga_t
+{
+	uint8_t  id_length;
+	uint8_t  colormap_type;
+	uint8_t  image_type;
+	uint16_t colormap_index;
+	uint16_t colormap_length;
+	uint8_t  colormap_size;
+	uint16_t x_origin;
+	uint16_t y_origin;
+	uint16_t width;
+	uint16_t height;
+	uint8_t  pixel_size;
+	uint8_t  attributes;
 };
 #pragma pack( pop )
 
@@ -152,7 +172,7 @@ public:
 		data = newData;
 	}
 
-	void RemapLogo( int stripes, const byte *rgb )
+	void RemapLogo( int stripes, const byte *rgb, bool horizontal = false )
 	{
 		// palette is always right after header
 		rgbquad_t *palette = GetPaletteData();
@@ -183,18 +203,18 @@ public:
 			return;
 
 		const bmp_t *hdr = GetBitmapHdr();
-		double lines_per_stripe = hdr->height / (double)stripes;
+		const double cells_per_stripe = ( horizontal ? hdr->width : hdr->height ) / (double)stripes;
 		byte *data = GetTextureData();
 
 		for( int i = 0; i < hdr->height; i++ )
 		{
-			int stripe = (int)(( hdr->height - i - 1 ) / lines_per_stripe );
-
 			for( int j = 0; j < hdr->width; j++ )
 			{
 				byte c = data[i * hdr->width + j];
 				if( c == 0 )
 					continue;
+
+				int stripe = horizontal ? j / cells_per_stripe : ( hdr->height - i - 1 ) / cells_per_stripe;
 
 				// remap to the palette
 				int idx = ( c / 256.0f ) * max_palette_slots; // remap to limited palette
@@ -203,6 +223,43 @@ public:
 				data[i * hdr->width + j] = Q_min( idx, max_palette_slots ); //
 			}
 		}
+	}
+
+	static inline void SwapBmpHdrToLE( bmp_t *hdr )
+	{
+		LittleLongSW( hdr->fileSize );
+		LittleLongSW( hdr->reserved0 );
+		LittleLongSW( hdr->bitmapDataOffset );
+		LittleLongSW( hdr->bitmapHeaderSize );
+		LittleLongSW( hdr->width );
+		LittleLongSW( hdr->height );
+		LittleShortSW( hdr->planes );
+		LittleShortSW( hdr->bitsPerPixel );
+		LittleLongSW( hdr->compression );
+		LittleLongSW( hdr->bitmapDataSize );
+		LittleLongSW( hdr->hRes );
+		LittleLongSW( hdr->vRes );
+		LittleLongSW( hdr->colors );
+		LittleLongSW( hdr->importantColors );
+	}
+
+	inline void SwapHdrToLE()
+	{
+		SwapBmpHdrToLE((bmp_t *)data );
+	}
+
+	inline HIMAGE Upload( const char *name, int flags = 0 )
+	{
+		uint fileSize = GetBitmapHdr()->fileSize;
+		SwapHdrToLE();
+		return EngFuncs::PIC_Load( name, GetBitmap(), fileSize, flags );
+	}
+
+	inline void Save( const char *name )
+	{
+		uint fileSize = GetBitmapHdr()->fileSize;
+		SwapHdrToLE();
+		EngFuncs::COM_SaveFile( name, GetBitmap(), fileSize );
 	}
 
 	inline byte *GetBitmap()
@@ -257,3 +314,5 @@ private:
 	bool fileAllocated;
 	byte *data;
 };
+
+#endif // BMPUTILS_H
