@@ -256,6 +256,7 @@ public:
 		filterPing = MAX_PING * 1000.0f;
 		filterEmpty = 0;
 		filterFull = 0;
+		filterProtocol = 0;
 	}
 
 	void Update() override;
@@ -359,6 +360,7 @@ public:
 	float filterPing;
 	char filterEmpty;
 	char filterFull;
+	char filterProtocol;
 	CUtlVector<server_t> servers;
 
 	filterMap_t filterMap;
@@ -423,6 +425,7 @@ public:
 	CMenuDropDownInt filterEmpty;
 	CMenuDropDownInt filterFull;
 	CMenuDropDownStr filterMap;
+	CMenuDropDownInt filterProtocol;
 
 	CMenuYesNoMessageBox msgBox;
 	CMenuTable	gameList;
@@ -655,6 +658,11 @@ void CMenuGameListModel::AddServerToList( netadr_t adr, const char *info, bool i
 	if( filterFull == '1' && !server.IsFull( ))
 		return;
 	if( filterFull == '0' && server.IsFull( ))
+		return;
+	
+	if( filterProtocol == '1' && server.isGoldSrc )
+		return;
+	if( filterProtocol == '2' && !server.isGoldSrc )
 		return;
 
 	if( filterMap.name[0] && colorstricmp( filterMap.name, server.mapname ) != 0 )
@@ -1349,6 +1357,25 @@ void CMenuServerBrowser::_Init( void )
 		parent->RefreshList();
 	});
 
+	filterProtocol.AddItem( "Xash3D 49", '1' );
+	filterProtocol.AddItem( "GoldSrc 48", '2' );
+	filterProtocol.AddItem( L( "All" ), 0 );
+	filterProtocol.SelectLast( false );
+	filterProtocol.bDropUp = true;
+	filterProtocol.eTextAlignment = QM_LEFT;
+	filterProtocol.iFgTextColor = uiInputFgColor - 0x00151515;
+	filterProtocol.SetCharSize( QM_SMALLFONT );
+	filterProtocol.SetSize( 130, 30 );
+	SET_EVENT_MULTI( filterProtocol.onChanged,
+	{
+		CMenuDropDownInt *self = (CMenuDropDownInt*)pSelf;
+		CMenuServerBrowser *parent = (CMenuServerBrowser*)self->Parent();
+
+		parent->gameListModel.filterProtocol = self->GetItem( );
+		parent->ClearList();
+		parent->RefreshList();
+	});
+
 	AddItem( gameList );
 	AddItem( tabSwitch );
 
@@ -1356,6 +1383,7 @@ void CMenuServerBrowser::_Init( void )
 	AddItem( filterEmpty );
 	AddItem( filterFull );
 	AddItem( filterMap );
+	AddItem( filterProtocol );
 }
 
 /*
@@ -1386,12 +1414,15 @@ void CMenuServerBrowser::_VidInit()
 	filterFull.SetCoord( x, y );
 	x += filterFull.size.w + 10;
 	filterMap.SetCoord( x, y );
+	x += filterMap.size.w + 10;
+	filterProtocol.SetCoord( x, y );
 
 	// force close all menus
 	filterPing.MenuClose( );
 	filterEmpty.MenuClose( );
 	filterFull.MenuClose( );
 	filterMap.MenuClose( );
+	filterProtocol.MenuClose( );
 }
 
 bool CMenuServerBrowser::IsAddressInTab( int tab, const netadr_t &adr ) const
@@ -1418,6 +1449,8 @@ void CMenuServerBrowser::Show()
 		favorite->Hide();
 		addServer->Hide();
 		tabSwitch.Hide();
+		filterProtocol.Hide();
+		gameListModel.filterProtocol = 0;
 	}
 	else
 	{
@@ -1425,6 +1458,8 @@ void CMenuServerBrowser::Show()
 		favorite->Show();
 		addServer->Show();
 		tabSwitch.Show();
+		filterProtocol.Show();
+		gameListModel.filterProtocol = filterProtocol.GetItem( );
 
 		favoritesList.RemoveAll();
 		historyList.RemoveAll();

@@ -40,6 +40,10 @@ file(GLOB MAINUI_SOURCES "miniutl/*.cpp" "*.cpp")
 
 add_library(menu SHARED ${MAINUI_CONTROLS_SOURCES} ${MAINUI_MENUS_SOURCES} ${MAINUI_FONT_RENDER_SOURCES} ${MAINUI_SOURCES})
 
+if(NOT ANDROID)
+	set_target_properties(menu PROPERTIES PREFIX "")
+endif()
+
 if(NOT WIN32 AND NOT MINGW)
 	add_compile_options(-Wall -Wextra -Wno-unused-parameter -Wno-unused-variable)
 endif()
