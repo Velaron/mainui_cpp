@@ -16,8 +16,45 @@ GNU General Public License for more details.
 
 #include "BaseMenu.h"
 #include "ClientWindow.h"
+#include "SteamButton.h"
+#include "Scissor.h"
 #include "PlayerModelView.h"
+#include <math.h>
 
+// The 3D model of the class (ui_showclassmodels 1) in the box of the picture of the Steam version
+class CSteamClassModelView : public CMenuPlayerModelView
+{
+public:
+	typedef CMenuPlayerModelView BaseClass;
+	const SteamFrame::Layout *frame = nullptr;
+
+	void VidInit( void ) override
+	{
+		BaseClass::VidInit();
+
+		if( !frame )
+			return;
+
+		int bx, by, bw, bh;
+		SteamFrame::ClassMenu::PictureBox( *frame, bx, by, bw, bh );
+		m_scPos = Point( bx + 1, by + 1 );
+		m_scSize = Size( bw - 2, bh - 2 );
+
+		// the camera for the new size of the view
+		refdef.viewport[0] = m_scPos.x;
+		refdef.viewport[1] = m_scPos.y;
+		refdef.viewport[2] = m_scSize.w;
+		refdef.viewport[3] = m_scSize.h;
+		CalcFov();
+
+		if( ent )
+			ent->origin[0] = ent->curstate.origin[0] = 45.0f / tan( DEG2RAD( refdef.fov_y / 2.0f ));
+	}
+};
+
+// The class menu as in the Steam version (see SteamFrame::ClassMenu): the buttons on the left, the picture of
+// the class (gfx/vgui/<class>.tga) in a box on the right and its description under it. The class under the
+// cursor (at first "AUTO-SELECT") is lit and shown.
 class CClientJoinClass : public CClientWindow
 {
 public:
@@ -34,14 +71,17 @@ public:
 		return CEventCallback( MenuCb( &CClientJoinClass::classFocusCb ), (void*)cmd );
 	}
 
-	void _Init();
-	void Reload();
+	void _Init() override;
+	void Reload() override;
+	void VidInit() override;
+	void Draw() override;
 
-	CMenuAction *AddButton( int key, const char *name, const char *modelname, Point pos );
+	CMenuAction *AddClassButton( int key, const char *name, const char *modelname, int slot );
 
 	bool hasCzero;
-	CMenuPlayerModelView player;
-	CMenuAction text;
+	bool hasCancel;
+	CSteamClassModelView player;
+	CMenuAction *cancel = nullptr;
 
 	void ConfirmSelection()
 	{
@@ -55,14 +95,15 @@ protected:
 private:
 	CUtlString command;
 
+	char m_szPicture[64] = "";     // gfx/vgui/<class>.tga (when the 3D model is not shown)
+	char m_szDescription[1024] = "";
+	HFont m_hDescFont = 0;         // "DefaultSmall": Verdana, thin
+
 	void classFocusCb( void *pExtra )
 	{
-		player.Show();
-		text.Show();
 		const char *sz = (const char *)pExtra;
 		const char *loctext = NULL;
-		CUtlString model;
-		
+
 		struct ClassEntry {
 			const char *modelT;
 			const char *modelCT;
@@ -130,23 +171,21 @@ private:
 				showModel = false;
 		}
 
-		if( !loctext )
-			loctext = "";
-		text.SetText( loctext );
+		Q_strncpy( m_szDescription, loctext ? loctext : "", sizeof( m_szDescription ));
 
-		if( showModel && ui_showclassmodels && ui_showclassmodels->value ) // try to load model
+		// the 3D model if it is wanted (ui_showclassmodels 1) and can be loaded, else the picture
+		if( showModel && ui_showclassmodels && ui_showclassmodels->value )
 		{
 			player.ent = EngFuncs::GetPlayerModel();
 			if( player.ent )
 			{
+				CUtlString model;
 				model.Format( "models/player/%s/%s.mdl", sz, sz );
 				player.hPlayerImage = 0;
 				player.eOverrideMode = CMenuPlayerModelView::PMV_SHOWMODEL;
 				EngFuncs::SetModel( player.ent, model );
 				if( !player.ent->model )
-				{
 					showModel = false;
-				}
 			}
 			else
 			{
@@ -158,13 +197,20 @@ private:
 			showModel = false;
 		}
 
-		if( !showModel )
+		if( showModel )
 		{
-			model.Format( "gfx/vgui/%s.tga", sz );
-
-			player.hPlayerImage = EngFuncs::PIC_Load( model );
-			player.eOverrideMode = CMenuPlayerModelView::PMV_SHOWIMAGE;
+			m_szPicture[0] = 0;
+			player.Show();
 		}
+		else
+		{
+			snprintf( m_szPicture, sizeof( m_szPicture ), "gfx/vgui/%s.tga", sz );
+			player.Hide();
+		}
+
+		// the button of this class is lit
+		for( int i = 0; i < m_iNumSteamButtons; ++i )
+			m_steamButtons[i]->chosen = m_szButtonModel[i] && !strcmp( m_szButtonModel[i], sz );
 	}
 
 	void classPressedCb( void *pExtra )
@@ -172,119 +218,182 @@ private:
 		classFocusCb( pExtra );
 		ConfirmSelection();
 	}
+
+	const char *m_szButtonModel[16] = {};
 };
 
 static class CClientJoinClassT: public CClientJoinClass
 {
 	typedef CClientJoinClass BaseClass;
 public:
-	void _Init();
+	void _Init() override;
 } uiJoinClassT;
 
 static class CClientJoinClassCT: public CClientJoinClass
 {
 	typedef CClientJoinClass BaseClass;
 public:
-	void _Init();
+	void _Init() override;
 } uiJoinClassCT;
 
 void CClientJoinClass::_Init()
 {
-
-	player.SetRect( 400, 180, 400, 284 );
-	player.backgroundColor = uiColorBlack;
-	player.colorStroke = uiPromptTextColor;
-	player.iStrokeWidth = 1;
+	// the 3D model in the box of the picture: its own background, no frame (the box has it)
+	player.frame = &m_frame;
+	player.SetRect( 0, 0, 1, 1 ); // the real place is set in pixels by its VidInit
+	player.backgroundColor = PackRGBA( 0, 0, 0, 200 );
+	player.colorStroke = PackRGBA( 0, 0, 0, 0 );
 	player.eFocusAnimation = QM_NOFOCUSANIMATION;
 	player.bDrawAsPlayer = false;
 	player.iFlags |= QMF_MOUSEONLY;
 	player.m_bCanCaptureFocus = false;
-
-	text.SetRect( 400, 500, 500, 200 );
-	text.SetBackground( 0U );
-	text.iFlags |= QMF_INACTIVE;
-	text.SetCharSize( QM_TINYFONT );
+	AddItem( player );
 
 	szName = L( "Cstrike_Join_Class" );
-	AddItem( player );
-	AddItem( text );
+}
+
+void CClientJoinClass::VidInit()
+{
+	BaseClass::VidInit(); // the frame, the buttons and their font
+
+	// "DefaultSmall": Verdana of the normal weight, the same size
+	m_hDescFont = CreateSteamFont( "Verdana", m_frame.textEm, 1.215f, 400 );
+	if( m_hDescFont <= 0 )
+		m_hDescFont = m_hTextFont;
 }
 
 void CClientJoinClass::Reload()
 {
-	keys[0].Reset();
+	// "0 CANCEL" (ClassMenu_*.res: under "AUTO-SELECT") only when the class is chosen again
+	SetButtonShown( cancel, '0', hasCancel );
 
-	text.SetText( "" );
 	player.eOverrideMode = CMenuPlayerModelView::PMV_SHOWIMAGE;
 	player.hPlayerImage = 0;
 	player.ent = EngFuncs::GetPlayerModel();
 	if( player.ent )
-	{
 		player.ent->angles[1] += 15;
-	}
 
+	// as in the Steam version the menu opens with "AUTO-SELECT" chosen
 	if( m_szDefaultClass )
 		classFocusCb( (void*)m_szDefaultClass );
 }
 
-
-CMenuAction *CClientJoinClass::AddButton( int key, const char *name, const char *modelname, Point pos )
+void CClientJoinClass::Draw()
 {
-	CMenuAction *act = CClientWindow::AddButton( key, name, pos, MakeCb( modelname ) );
+	if( m_bShowScores )
+		return; // the table of the players is shown instead of the menu
+
+	BaseClass::Draw(); // the frame and the buttons
+
+	int bx, by, bw, bh;
+	SteamFrame::ClassMenu::PictureBox( m_frame, bx, by, bw, bh );
+
+	// the picture: as high as the box, its own proportions, cut by the box (the 3D model, when it is shown,
+	// is drawn with the buttons and has its own background)
+	if( m_szPicture[0] )
+	{
+		UI_FillRect( bx + 1, by + 1, bw - 2, bh - 2, PackRGBA( 0, 0, 0, 200 ));
+
+		HIMAGE pic = EngFuncs::PIC_Load( m_szPicture );
+		const int pw = pic ? EngFuncs::PIC_Width( pic ) : 0;
+		const int ph = pic ? EngFuncs::PIC_Height( pic ) : 0;
+
+		if( pw > 0 && ph > 0 )
+		{
+			const int h = bh - 2;
+			const int w = (int)( (float)h * pw / ph + 0.5f );
+			const int x = SteamFrame::ClassMenu::PictureCenterX( m_frame ) - w / 2;
+
+			UI::Scissor::PushScissor( bx + 1, by + 1, bw - 2, bh - 2 );
+			UI_DrawPic( x, by + 1, w, h, uiColorWhite, m_szPicture, QM_DRAWTRANS );
+			UI::Scissor::PopScissor();
+		}
+	}
+
+	DrawFrame( bx, by, bw, bh, PackRGBA( 188, 112, 0, 128 ));
+
+	// the description, line by line ("LabelDimText": 255 176 0 164)
+	const int lineH = SteamFrame::TeamMenu::LineHeight( m_frame );
+	const int x = SteamFrame::ClassMenu::DescriptionX( m_frame );
+	const int maxW = m_frame.panelX + m_frame.panelW - m_frame.U( 20.0f ) - x;
+	int capTop = SteamFrame::ClassMenu::DescriptionCapTop( m_frame );
+
+	const char *p = m_szDescription;
+	char buf[512];
+
+	while( *p && capTop + lineH < m_frame.panelY + m_frame.panelH )
+	{
+		const char *end = p;
+		while( *end && *end != '\n' )
+			end++;
+
+		int len = (int)( end - p );
+		if( len > (int)sizeof( buf ) - 1 )
+			len = sizeof( buf ) - 1;
+		memcpy( buf, p, len );
+		buf[len] = 0;
+		if( len > 0 && buf[len - 1] == '\r' )
+			buf[len - 1] = 0;
+
+		DrawSteamText( m_hDescFont, x, capTop, m_iCapHeight, maxW, buf, PackRGBA( 255, 176, 0, 164 ));
+		capTop += lineH;
+		p = *end ? end + 1 : end;
+	}
+}
+
+CMenuAction *CClientJoinClass::AddClassButton( int key, const char *name, const char *modelname, int slot )
+{
+	const int index = m_iNumSteamButtons;
+	CSteamMenuButton *act = AddSteamButton( key, name, slot, MakeCb( modelname ));
 	act->onGotFocus = MakeFocusCb( modelname );
+
+	if( index < (int)( sizeof( m_szButtonModel ) / sizeof( m_szButtonModel[0] )))
+		m_szButtonModel[index] = modelname;
+
 	return act;
 }
 
+// the places of the Steam version: 1..4, then the CZ class and "AUTO-SELECT" a place lower
 void CClientJoinClassT::_Init()
 {
-	m_szDefaultClass = "terror";
-	AddButton( '1', L( "Cstrike_Terror" ), "terror",
-		Point( 100, 180 ));
-	AddButton( '2', L( "Cstrike_L337_Krew" ), "leet",
-		Point( 100, 230 ));
-	AddButton( '3', L( "Cstrike_Arctic" ), "arctic",
-		Point( 100, 280 ));
-	AddButton( '4', L( "Cstrike_Guerilla" ), "guerilla",
-		Point( 100, 330 ));
+	m_szDefaultClass = "t_random";
+	AddClassButton( '1', L( "Cstrike_Terror" ), "terror", 0 );
+	AddClassButton( '2', L( "Cstrike_L337_Krew" ), "leet", 1 );
+	AddClassButton( '3', L( "Cstrike_Arctic" ), "arctic", 2 );
+	AddClassButton( '4', L( "Cstrike_Guerilla" ), "guerilla", 3 );
 	if( hasCzero )
 	{
-		AddButton( '5', L( "Cstrike_Militia" ), "militia",
-			Point( 100, 380 ));
-		AddButton( '6', L( "Cstrike_Auto_Select" ), "t_random",
-			Point( 100, 430 ));
+		AddClassButton( '5', L( "Cstrike_Militia" ), "militia", 4 );
+		AddClassButton( '6', L( "Cstrike_Auto_Select" ), "t_random", 5 );
 	}
 	else
 	{
-		AddButton( '5', L( "Cstrike_Auto_Select" ), "t_random",
-			Point( 100, 430 ));
+		AddClassButton( '5', L( "Cstrike_Auto_Select" ), "t_random", 5 );
 	}
+
+	cancel = AddSteamButton( '0', L( "Cstrike_Cancel" ), 6, CEventCallback( VoidCb( &CMenuBaseWindow::Hide ) ) );
 
 	BaseClass::_Init();
 }
 
 void CClientJoinClassCT::_Init()
 {
-	m_szDefaultClass = "urban";
-	AddButton( '1', L( "Cstrike_Urban" ), "urban",
-		Point( 100, 180 ));
-	AddButton( '2', L( "Cstrike_GSG9" ), "gsg9",
-		Point( 100, 230 ));
-	AddButton( '3', L( "Cstrike_SAS" ), "sas",
-		Point( 100, 280 ));
-	AddButton( '4', L( "Cstrike_GIGN" ), "gign",
-		Point( 100, 330 ));
+	m_szDefaultClass = "ct_random";
+	AddClassButton( '1', L( "Cstrike_Urban" ), "urban", 0 );
+	AddClassButton( '2', L( "Cstrike_GSG9" ), "gsg9", 1 );
+	AddClassButton( '3', L( "Cstrike_SAS" ), "sas", 2 );
+	AddClassButton( '4', L( "Cstrike_GIGN" ), "gign", 3 );
 	if( hasCzero )
 	{
-		AddButton( '5', L( "Cstrike_Spetsnaz" ), "spetsnaz",
-			Point( 100, 380 ));
-		AddButton( '6', L( "Cstrike_Auto_Select" ), "ct_random",
-			Point( 100, 430 ));
+		AddClassButton( '5', L( "Cstrike_Spetsnaz" ), "spetsnaz", 4 );
+		AddClassButton( '6', L( "Cstrike_Auto_Select" ), "ct_random", 5 );
 	}
 	else
 	{
-		AddButton( '5', L( "Cstrike_Auto_Select" ), "ct_random",
-			Point( 100, 430 ));
+		AddClassButton( '5', L( "Cstrike_Auto_Select" ), "ct_random", 5 );
 	}
+
+	cancel = AddSteamButton( '0', L( "Cstrike_Cancel" ), 6, CEventCallback( VoidCb( &CMenuBaseWindow::Hide ) ) );
 
 	BaseClass::_Init();
 }
@@ -292,6 +401,7 @@ void CClientJoinClassCT::_Init()
 void UI_JoinClassT_Show( int param1, int param2 )
 {
 	uiJoinClassT.hasCzero = param1;
+	uiJoinClassT.hasCancel = param2 != 0;
 	EngFuncs::KEY_SetDest( KEY_MENU );
 	uiJoinClassT.Show();
 }
@@ -299,6 +409,7 @@ void UI_JoinClassT_Show( int param1, int param2 )
 void UI_JoinClassCT_Show( int param1, int param2 )
 {
 	uiJoinClassCT.hasCzero = param1;
+	uiJoinClassCT.hasCancel = param2 != 0;
 	EngFuncs::KEY_SetDest( KEY_MENU );
 	uiJoinClassCT.Show();
 }

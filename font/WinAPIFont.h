@@ -27,6 +27,13 @@ GNU General Public License for more details.
 #include "utlmemory.h"
 #include "utlrbtree.h"
 
+// the letters are drawn by Windows one at a time as in a whole string (ExtTextOut, grayscale antialiasing) and
+// placed by their ABC widths, as the VGUI2 fonts of the Steam version: even spaces between the letters
+// (a flag of CFontBuilder::SetFlags, after FONT_STRIKEOUT; only the fonts of Windows know it)
+#ifndef FONT_GDI_TEXT
+#define FONT_GDI_TEXT ( 1 << 3 )
+#endif
+
 class CWinAPIFont : public CBaseFont
 {
 public:
@@ -47,6 +54,10 @@ public:
 	bool m_bFound;
 
 private:
+	// FONT_GDI_TEXT: the pixels kept on each side of the ABC box of a letter
+	enum { GDI_TEXT_PAD = 2 };
+	void GetCharGDI( int ch, Size sz, unsigned char *rgba, Size &drawSize );
+
 	HFONT m_hFont;
 	HDC m_hDC;
 	HBITMAP m_hDIB;
