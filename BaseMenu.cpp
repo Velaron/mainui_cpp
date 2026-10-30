@@ -641,10 +641,22 @@ static bool UI_UpdateWindowInsets( void )
 UI_UpdateMenu
 =================
 */
+// The console was closed (or the main menu hidden) while a client window (buy menu, team menu...) is open:
+// the engine gives the keys to the game then, and the window stayed on the screen without the mouse and the
+// keys. The keys are given back to it in the next frame (after the engine has set its key destination).
+static bool s_bClientKeysLost = false;
+
 void UI_UpdateMenu( float flTime )
 {
 	if( !uiStatic.initialized )
 		return;
+
+	if( s_bClientKeysLost )
+	{
+		s_bClientKeysLost = false;
+		if( uiStatic.client.IsActive() && !uiStatic.menu.IsActive() && CL_IsActive() )
+			EngFuncs::KEY_SetDest( KEY_MENU );
+	}
 
 	if( UI_UpdateWindowInsets() )
 		UI_VidInit();
@@ -856,6 +868,10 @@ void UI_SetActiveMenu( int fActive )
 	{
 		UI_CloseMenu();
 		uiStatic.nextFrameActive = false; // don't call main menu next frame
+
+		// a client window is still open: it gets the keys back in the next frame (see UI_UpdateMenu)
+		if( uiStatic.client.IsActive() )
+			s_bClientKeysLost = true;
 	}
 }
 
