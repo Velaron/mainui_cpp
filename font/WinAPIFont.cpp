@@ -76,7 +76,8 @@ bool CWinAPIFont::Create( const char *name, int tall, int weight, int blur, floa
 		m_iFlags & FONT_UNDERLINE,
 		m_iFlags & FONT_STRIKEOUT,
 		charset, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-		PROOF_QUALITY, DEFAULT_PITCH | FF_DONTCARE, font.lfFaceName );
+		( m_iFlags & FONT_GDI_TEXT ) ? ANTIALIASED_QUALITY : PROOF_QUALITY,
+		DEFAULT_PITCH | FF_DONTCARE, font.lfFaceName );
 
 	if( !m_hFont )
 	{
@@ -98,9 +99,11 @@ bool CWinAPIFont::Create( const char *name, int tall, int weight, int blur, floa
 
 	m_iHeight = tm.tmHeight + 2 * m_iOutlineSize;
 	m_iMaxCharWidth = tm.tmMaxCharWidth;
+	if( m_iFlags & FONT_GDI_TEXT )
+		m_iMaxCharWidth += GDI_TEXT_PAD * 2; // the pictures of the letters are wider (see GetCharGDI)
 	m_iAscent = tm.tmAscent;
 
-	m_rgiBitmapSize[0] = tm.tmMaxCharWidth + m_iOutlineSize * 2;
+	m_rgiBitmapSize[0] = tm.tmMaxCharWidth + m_iOutlineSize * 2 + GDI_TEXT_PAD * 2;
 	m_rgiBitmapSize[1] = tm.tmHeight + m_iOutlineSize * 2;
 
 	::BITMAPINFOHEADER header = { 0 };
@@ -136,6 +139,16 @@ void CWinAPIFont::GetCharRGBA( int ch, Point pt, Size sz, unsigned char *rgba, S
 	MAT2 mat2 = { { 0, 1 }, { 0, 0 }, { 0, 0 }, { 0, 1 } };
 	int bytesNeeded = 0;
 	
+	if( m_iFlags & FONT_GDI_TEXT )
+	{
+		GetCharGDI( ch, sz, rgba, drawSize );
+		ApplyBlur( sz, rgba );
+		ApplyOutline( Point( 0, 0 ), sz, rgba );
+		ApplyScanline( sz, rgba );
+		ApplyStrikeout( sz, rgba );
+		return;
+	}
+
 	// try and get the glyph directly
 
 	::SelectObject( m_hDC, m_hFont );
@@ -275,6 +288,60 @@ void CWinAPIFont::GetCharRGBA( int ch, Point pt, Size sz, unsigned char *rgba, S
 	ApplyStrikeout( sz, rgba );
 }
 
+// FONT_GDI_TEXT: the letter is drawn by ExtTextOut as Windows draws it in a string; the pen is GDI_TEXT_PAD pixels
+// before its "a", so the light pixels of the antialiasing outside its ABC box are kept (its picture starts at a - pad)
+void CWinAPIFont::GetCharGDI( int ch, Size sz, unsigned char *rgba, Size &drawSize )
+{
+	int a, b, c;
+	GetCharABCWidths( ch, a, b, c ); // already widened by the pad on both sides
+
+	int wide = b;
+	if( wide > m_rgiBitmapSize[0] )
+		wide = m_rgiBitmapSize[0];
+	if( wide < 0 )
+		wide = 0;
+	int tall = m_iHeight;
+	if( tall > m_rgiBitmapSize[1] )
+		tall = m_rgiBitmapSize[1];
+
+	memset( m_pBuf, 0, (size_t)m_rgiBitmapSize[0] * m_rgiBitmapSize[1] * 4 );
+	::SelectObject( m_hDC, m_hFont );
+	::SetTextAlign( m_hDC, TA_LEFT | TA_TOP | TA_NOUPDATECP );
+	::SetBkColor( m_hDC, RGB( 0, 0, 0 ) );
+	::SetTextColor( m_hDC, RGB( 255, 255, 255 ) );
+	::SetBkMode( m_hDC, TRANSPARENT );
+
+	wchar_t wch = ( wchar_t )ch;
+	if( ch != '\t' )
+		::ExtTextOutW( m_hDC, -a + m_iOutlineSize, m_iOutlineSize, 0, NULL, &wch, 1, NULL );
+	::GdiFlush();
+	::SetTextAlign( m_hDC, TA_LEFT | TA_TOP | TA_UPDATECP );
+
+	for( int j = 0; j < tall && j < sz.h; j++ )
+	{
+		for( int i = 0; i < wide; i++ )
+		{
+			const int x = i + m_iBlur;
+			if( x >= sz.w )
+				break;
+
+			const unsigned char *src = &m_pBuf[( i + j * m_rgiBitmapSize[0] ) * 4];
+			unsigned char m = src[0] > src[1] ? src[0] : src[1];
+			if( src[2] > m )
+				m = src[2];
+
+			unsigned char *dst = &rgba[( x + j * sz.w ) * 4];
+			dst[0] = dst[1] = dst[2] = m ? 255 : 0;
+			dst[3] = m; // white on black: the brightness is how much of the pixel the letter covers
+		}
+	}
+
+	drawSize.w = wide + m_iBlur * 2;
+	if( drawSize.w > sz.w )
+		drawSize.w = sz.w;
+	drawSize.h = tall;
+}
+
 void CWinAPIFont::GetCharABCWidthsNoCache( int ch, int &a, int &b, int &c )
 {
 	// not in the cache, get from windows (this call is a little slow)
@@ -285,6 +352,14 @@ void CWinAPIFont::GetCharABCWidthsNoCache( int ch, int &a, int &b, int &c )
 		a = abc.abcA;
 		b = abc.abcB;
 		c = abc.abcC;
+
+		// the pen moves by a + b + c as in a string; the picture is a little wider than b (antialiasing)
+		if( m_iFlags & FONT_GDI_TEXT )
+		{
+			a -= GDI_TEXT_PAD;
+			b += GDI_TEXT_PAD * 2;
+			c -= GDI_TEXT_PAD;
+		}
 	}
 	else
 	{

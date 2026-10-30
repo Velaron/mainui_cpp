@@ -18,6 +18,13 @@ GNU General Public License for more details.
 #include "Utils.h"
 #include "miniutl/utlbuffer.h"
 
+// the letters are drawn by Windows one at a time as in a whole string (ExtTextOut, grayscale antialiasing) and
+// placed by their ABC widths, as the VGUI2 fonts of the Steam version: even spaces between the letters
+// (a flag of CFontBuilder::SetFlags, after FONT_STRIKEOUT; only the fonts of Windows know it)
+#ifndef FONT_GDI_TEXT
+#define FONT_GDI_TEXT ( 1 << 3 )
+#endif
+
 CBaseFont::CBaseFont()
 	: m_iTall(), m_iWeight(), m_iFlags(),
 	m_iHeight(), m_iMaxCharWidth(), m_iAscent(),
@@ -44,6 +51,7 @@ void CBaseFont::GetTextureName( char *dst, size_t len ) const
 	int i = 0;
 	if( GetFlags() & FONT_ITALIC ) attribs[i++] = 'i'; // 1 parameter
 	if( GetFlags() & FONT_UNDERLINE ) attribs[i++] = 'u'; // 1 parameter
+	if( GetFlags() & FONT_GDI_TEXT ) attribs[i++] = 'd'; // 1 parameter
 	if( m_iBlur )
 	{
 		int chars = snprintf( attribs + i, sizeof( attribs ) - 1 - i, "g%i%.2f", m_iBlur, m_fBrighten );
