@@ -28,6 +28,15 @@ GNU General Public License for more details.
 #endif
 
 #include "BitmapFont.h"
+#if defined( MAINUI_USE_FONTCONFIG )
+#include <stdio.h>
+#include <string.h>
+#include <strings.h>
+#include <map>
+#include <string>
+#include <vector>
+#include <fontconfig/fontconfig.h>
+#endif
 #include "utflib.h"
 
 #define DEFAULT_MENUFONT "Trebuchet MS"
@@ -538,8 +547,58 @@ HFont CFontBuilder::Create()
 	return g_FontMgr->m_Fonts.AddToTail(font) + 1;
 }
 
+#if defined( MAINUI_USE_FONTCONFIG )
+// The font file of the system for a family and a weight (fontconfig). exact: only if the system really has that
+// family (Trebuchet MS and Tahoma have their replacements among the files of the game otherwise)
+static bool FindSystemFont( const char *name, int weight, bool exact, char *dataFile, size_t dataFileChars )
+{
+	if( !FcInit() )
+		return false;
+
+	FcPattern *pattern = FcPatternCreate();
+	if( !pattern )
+		return false;
+
+	FcPatternAddString( pattern, FC_FAMILY, (const FcChar8 *)name );
+	// without the font asked for: DejaVu Sans (made from Bitstream Vera, drawn by the author of Verdana)
+	FcPatternAddString( pattern, FC_FAMILY, (const FcChar8 *)"DejaVu Sans" );
+	FcPatternAddString( pattern, FC_FAMILY, (const FcChar8 *)"sans-serif" );
+	FcPatternAddInteger( pattern, FC_WEIGHT, weight >= 600 ? FC_WEIGHT_BOLD : FC_WEIGHT_REGULAR );
+	FcPatternAddBool( pattern, FC_SCALABLE, FcTrue );
+	FcConfigSubstitute( NULL, pattern, FcMatchPattern );
+	FcDefaultSubstitute( pattern );
+
+	FcResult result = FcResultNoMatch;
+	FcPattern *match = FcFontMatch( NULL, pattern, &result );
+	bool ok = false;
+
+	if( match )
+	{
+		FcChar8 *file = NULL, *family = NULL;
+		if( FcPatternGetString( match, FC_FILE, 0, &file ) == FcResultMatch && file && file[0] == '/' )
+		{
+			ok = !exact || ( FcPatternGetString( match, FC_FAMILY, 0, &family ) == FcResultMatch && family
+				&& !strcasecmp( (const char *)family, name ));
+			if( ok )
+				Q_strncpy( dataFile, (const char *)file, dataFileChars );
+		}
+		FcPatternDestroy( match );
+	}
+
+	FcPatternDestroy( pattern );
+	return ok;
+}
+#endif
+
 bool CFontManager::FindFontDataFile( const char *name, int tall, int weight, int flags, char *dataFile, size_t dataFileChars )
 {
+#if defined( MAINUI_USE_FONTCONFIG )
+	// the font of the system when it has that very family (Verdana, Tahoma, Trebuchet MS of the "Microsoft core fonts"
+	// packages: the menus look as on Windows)
+	if( FindSystemFont( name, weight, true, dataFile, dataFileChars ))
+		return true;
+#endif
+
 	if( !strcmp( name, "Trebuchet MS" ))
 	{
 		Q_strncpy( dataFile, "gfx/fonts/FiraSans-Regular.ttf", dataFileChars );
@@ -550,6 +609,12 @@ bool CFontManager::FindFontDataFile( const char *name, int tall, int weight, int
 		Q_strncpy( dataFile, "gfx/fonts/tahoma.ttf", dataFileChars );
 		return true;
 	}
+
+#if defined( MAINUI_USE_FONTCONFIG )
+	// any other font (Verdana of the client menus): what the system has in its place
+	if( FindSystemFont( name, weight, false, dataFile, dataFileChars ))
+		return true;
+#endif
 
 	return false;
 }
@@ -565,7 +630,51 @@ byte *CFontManager::LoadFontDataFile( const char *vfspath, int *plen )
 		return m_FontFiles[i].data;
 	}
 	int len = 0;
-	byte *p = EngFuncs::COM_LoadFile( vfspath, &len );
+	byte *p = NULL;
+
+#if defined( MAINUI_USE_FONTCONFIG )
+	// a font file of the system (FindSystemFont): read directly, the file system of the engine sees only the game.
+	// Kept until the end of the game (fonts are few), not in m_FontFiles: those are freed by the engine
+	if( vfspath[0] == '/' )
+	{
+		static std::map<std::string, std::vector<byte>> systemFiles;
+		auto found = systemFiles.find( vfspath );
+		if( found != systemFiles.end( ))
+		{
+			if( plen )
+				*plen = (int)found->second.size();
+			return found->second.data();
+		}
+
+		FILE *f = fopen( vfspath, "rb" );
+		if( !f )
+			return NULL;
+
+		fseek( f, 0, SEEK_END );
+		const long size = ftell( f );
+		fseek( f, 0, SEEK_SET );
+
+		std::vector<byte> data;
+		if( size > 0 && size < 64 * 1024 * 1024 )
+		{
+			data.resize( (size_t)size );
+			if( fread( data.data(), 1, (size_t)size, f ) != (size_t)size )
+				data.clear();
+		}
+		fclose( f );
+
+		if( data.empty( ))
+			return NULL;
+
+		std::vector<byte> &kept = systemFiles[vfspath];
+		kept.swap( data );
+		if( plen )
+			*plen = (int)kept.size();
+		return kept.data();
+	}
+#endif
+
+	p = EngFuncs::COM_LoadFile( vfspath, &len );
 	if( p != nullptr )
 	{
 		if( plen )
